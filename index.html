@@ -2837,23 +2837,52 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
   ];
 
   const hasAxis = AXIS_CHART_TYPES.includes(chartType);
+  const isPie    = chartType === 'pie';
+  const isKPI    = chartType === 'number';
 
   // Determine if selected X field is a date
   const xCol = currentTable?.cols.find(c => c.name === xAxis);
   const xIsDate = xCol?.type === 'date';
 
-  // Only numeric cols for agg types that require it
-  const numericCols = currentTable?.cols.filter(c => c.type === 'num') || [];
+  // Virtual "Row Count" field always available as a numeric
+  const ROW_COUNT_FIELD = {name:'Row Count', type:'num', virtual:true};
 
-  const addYMetric = (field, colType) => {
-    // Default agg: count for non-numeric, sum for numeric
-    const defaultAgg = colType === 'num' ? 'sum' : 'count';
+  // All cols + Row Count virtual
+  const allColsWithRowCount = [ROW_COUNT_FIELD, ...(currentTable?.cols || [])];
+
+  // Numeric cols only (for Y axis and KPI) — always includes Row Count
+  const numericCols = allColsWithRowCount.filter(c => c.type === 'num');
+
+  // X-eligible cols: str and date (not num)
+  const xEligibleCols = currentTable?.cols.filter(c => c.type !== 'num') || [];
+
+  const addYMetric = (field) => {
+    const defaultAgg = field === 'Row Count' ? 'count' : 'sum';
     setYMetrics(prev => [...prev, {field, agg: defaultAgg, comboType: 'bar'}]);
   };
 
   const removeYMetric = (idx) => setYMetrics(prev => prev.filter((_,i) => i !== idx));
 
   const updateYMetric = (idx, patch) => setYMetrics(prev => prev.map((m,i) => i===idx ? {...m,...patch} : m));
+
+  // For pie "Summary" — the field placed in yMetrics[0] acts as the breakout dimension
+  // We show its known distinct values as breakout items (using sample rows from DATABASES)
+  const pieBreakoutField = isPie ? (yMetrics[0]?.field || null) : null;
+  const PIE_SLICE_COLORS = ['var(--chart-1)','var(--chart-2)','var(--chart-3)','var(--chart-4)','var(--chart-5)'];
+  const getPieBreakoutValues = () => {
+    if (!pieBreakoutField || pieBreakoutField === 'Row Count') return [];
+    const col = currentTable?.cols.find(c => c.name === pieBreakoutField);
+    if (!col) return [];
+    const colIdx = currentTable.cols.indexOf(col);
+    const db = currentDB;
+    const seen = new Set();
+    const vals = [];
+    for (const row of (db?.rows || [])) {
+      const v = String(row[colIdx] ?? '');
+      if (v && !seen.has(v)) { seen.add(v); vals.push(v); }
+    }
+    return vals;
+  };
 
   const previewData = [
     {source:'Organic',   value:124000, value2:88000},
@@ -2946,24 +2975,55 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
         </ResponsiveContainer>
       );
     }
-    if (chartType === 'pie') return (
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie data={trafficBySource} cx="50%" cy="50%" innerRadius={60} outerRadius={110} paddingAngle={3} dataKey="value">
-            {trafficBySource.map((e,i) => <Cell key={i} fill={e.color}/>)}
-          </Pie>
-          <Tooltip contentStyle={axisStyle}/>
-          <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize:'12px'}}/>
-        </PieChart>
-      </ResponsiveContainer>
-    );
-    if (chartType === 'number') return (
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:8}}>
-        <div style={{fontFamily:'var(--font-display)',fontSize:'64px',fontWeight:700,color:'var(--text-primary)',letterSpacing:'-2px',lineHeight:1}}>$424K</div>
-        <div style={{fontSize:'14px',color:'var(--text-secondary)',fontWeight:500}}>Total Estimated Value — Hot Leads</div>
-        <div className="kpi-delta up" style={{marginTop:4}}><Icon name="arrowUp" size={11}/>+18.4% vs last period</div>
-      </div>
-    );
+    if (chartType === 'pie') {
+      const breakoutVals = getPieBreakoutValues();
+      const pieData = breakoutVals.length > 0
+        ? breakoutVals.map((v,i) => ({name: v, value: [54, 43, 2, 1][i] || Math.floor(50/breakoutVals.length)}))
+        : trafficBySource.map(s => ({name:s.name, value:s.value}));
+      const total = pieData.reduce((a,d) => a + d.value, 0);
+      return (
+        <div style={{display:'flex',alignItems:'center',height:'100%',gap:32}}>
+          <div style={{minWidth:220,display:'flex',flexDirection:'column',gap:10}}>
+            {pieData.map((d,i) => {
+              const pct = total > 0 ? ((d.value/total)*100).toFixed(2)+'%' : '0.00%';
+              return (
+                <div key={d.name} style={{display:'flex',alignItems:'center',gap:8,fontSize:'13px',color:'var(--text-primary)'}}>
+                  <span style={{width:10,height:10,borderRadius:'50%',background:PIE_SLICE_COLORS[i%5],flexShrink:0}}/>
+                  <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.name}</span>
+                  <span style={{fontWeight:600,color:'var(--text-secondary)',minWidth:52,textAlign:'right'}}>{pct}</span>
+                </div>
+              );
+            })}
+          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={pieData} cx="50%" cy="50%" innerRadius="42%" outerRadius="72%" paddingAngle={2} dataKey="value"
+                label={({cx,cy,midAngle,innerRadius,outerRadius,percent}) => {
+                  if (percent < 0.04) return null;
+                  const R = Math.PI/180, r = innerRadius+(outerRadius-innerRadius)*0.5;
+                  const x = cx + r*Math.cos(-midAngle*R), y = cy + r*Math.sin(-midAngle*R);
+                  return <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>{(percent*100).toFixed(1)}%</text>;
+                }} labelLine={false}>
+                {pieData.map((_,i) => <Cell key={i} fill={PIE_SLICE_COLORS[i%5]}/>)}
+              </Pie>
+              <Tooltip contentStyle={{background:'var(--card-bg)',border:'1px solid var(--border)',borderRadius:'8px',fontSize:'12px'}}/>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
+    if (chartType === 'number') {
+      const kpiField = yMetrics[0]?.field || 'Row Count';
+      const aggLabel = {count:'Count of rows',sum:'Sum of',avg:'Avg of',distinct:'Distinct',min:'Min of',max:'Max of'}[yMetrics[0]?.agg || 'count'];
+      const kpiLabel = kpiField === 'Row Count' ? 'Total Row Count' : `${aggLabel} ${kpiField}`;
+      return (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:8}}>
+          <div style={{fontFamily:'var(--font-display)',fontSize:'64px',fontWeight:700,color:'var(--text-primary)',letterSpacing:'-2px',lineHeight:1}}>15,280</div>
+          <div style={{fontSize:'14px',color:'var(--text-secondary)',fontWeight:500}}>{kpiLabel}</div>
+          <div className="kpi-delta up" style={{marginTop:4}}><Icon name="arrowUp" size={11}/>+18.4% vs last period</div>
+        </div>
+      );
+    }
     if (chartType === 'table') return (
       <div style={{overflowX:'auto',height:'100%',overflowY:'auto'}}>
         <table className="data-table">
@@ -3105,7 +3165,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
               <div style={{padding:'0 4px'}}>
                 <div className="chart-type-grid">
                   {chartTypes.map(ct => (
-                    <div key={ct.id} className={`chart-type-option${chartType===ct.id?' selected':''}`} onClick={() => setChartType(ct.id)}>
+                    <div key={ct.id} className={`chart-type-option${chartType===ct.id?' selected':''}`} onClick={() => { setChartType(ct.id); setYMetrics([]); setXAxis(''); }}>
                       <Icon name={ct.icon} size={18}/>
                       {ct.label}
                     </div>
@@ -3113,78 +3173,57 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                 </div>
               </div>
 
-              {/* ── X Axis (only for axis-based charts) ── */}
+              {/* ══ AXIS CHARTS (bar, row, line, area, combo) ══ */}
               {hasAxis && <>
                 <div className="divider"/>
+                {/* X Axis */}
                 <div className="config-zone">
                   <div className="config-zone-title">X Axis / Dimension</div>
-                  <div className={`drop-target${xAxis?' has-items':''}`}
-                    style={{cursor:'default'}}>
+                  <div className={`drop-target${xAxis?' has-items':''}`} style={{cursor:'default'}}>
                     {!xAxis
-                      ? <span className="drop-placeholder">Click a column below to add…</span>
+                      ? <span className="drop-placeholder">Click a str or date column below…</span>
                       : <span className="dropped-field" onClick={() => setXAxis('')}>{xAxis} ×</span>
                     }
                   </div>
-                  {/* Date grouping — only when X field is a date */}
                   {xAxis && xIsDate && (
                     <div style={{marginTop:6}}>
                       <div style={{fontSize:'11px',color:'var(--text-tertiary)',fontWeight:500,marginBottom:4,paddingLeft:2}}>Group by</div>
                       <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
                         {DATE_GROUP_OPTIONS.map(g => (
-                          <button key={g}
-                            onClick={() => setXDateGroup(g)}
-                            className="btn"
-                            style={{
-                              padding:'2px 9px', fontSize:'11.5px', height:'auto',
-                              background: xDateGroup===g ? 'var(--accent)' : 'var(--badge-bg)',
-                              color: xDateGroup===g ? 'white' : 'var(--text-secondary)',
-                              border: 'none',
-                              fontWeight: xDateGroup===g ? 600 : 400,
-                            }}>{g}</button>
+                          <button key={g} onClick={() => setXDateGroup(g)} className="btn" style={{
+                            padding:'2px 9px', fontSize:'11.5px', height:'auto',
+                            background: xDateGroup===g ? 'var(--accent)' : 'var(--badge-bg)',
+                            color: xDateGroup===g ? 'white' : 'var(--text-secondary)',
+                            border: 'none', fontWeight: xDateGroup===g ? 600 : 400,
+                          }}>{g}</button>
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
-              </>}
 
-              {/* ── Y Axis / Metrics (only for axis-based charts) ── */}
-              {hasAxis && (
+                {/* Y Axis — numeric only */}
                 <div className="config-zone">
-                  <div className="config-zone-title">Y Axis / Metrics</div>
+                  <div className="config-zone-title">Y Axis / Metrics <span style={{fontWeight:400,color:'var(--text-tertiary)',fontSize:'10px'}}>(numeric)</span></div>
                   {yMetrics.length === 0
-                    ? <div className="drop-target"><span className="drop-placeholder">Click a column below to add…</span></div>
+                    ? <div className="drop-target"><span className="drop-placeholder">Click a num column or Row Count…</span></div>
                     : yMetrics.map((m, idx) => {
-                        const col = currentTable?.cols.find(c => c.name === m.field);
-                        const isNum = col?.type === 'num';
-                        // Filter agg options: if not numeric, exclude requiresNum ones
-                        const aggOpts = Y_AGG_OPTIONS.filter(o => !o.requiresNum || isNum);
+                        const aggOpts = m.field === 'Row Count'
+                          ? Y_AGG_OPTIONS.filter(o => !o.requiresNum)
+                          : Y_AGG_OPTIONS; // all opts are valid for num cols
                         return (
-                          <div key={idx} style={{
-                            background:'var(--input-bg)',border:'1px solid var(--border)',
-                            borderRadius:'var(--radius-sm)',padding:'8px 10px',marginBottom:6,
-                          }}>
+                          <div key={idx} style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'8px 10px',marginBottom:6}}>
                             <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
-                              <span style={{
-                                fontSize:'12px',fontWeight:600,color:'var(--text-primary)',flex:1,
-                                overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-                              }}>{m.field}</span>
-                              {/* Combo type selector — only for combo chart */}
+                              <span style={{fontSize:'12px',fontWeight:600,color:'var(--text-primary)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.field}</span>
                               {chartType === 'combo' && (
                                 <div style={{display:'flex',gap:2}}>
                                   {COMBO_SERIES_TYPES.map(st => (
-                                    <button key={st.id}
-                                      onClick={() => updateYMetric(idx,{comboType:st.id})}
-                                      title={st.label}
-                                      className="btn"
-                                      style={{
-                                        padding:'2px 6px', fontSize:'11px', height:'auto', gap:3,
-                                        background: m.comboType===st.id ? 'var(--accent-light)' : 'transparent',
-                                        color: m.comboType===st.id ? 'var(--accent)' : 'var(--text-tertiary)',
-                                        border: `1px solid ${m.comboType===st.id ? 'var(--accent)' : 'var(--border)'}`,
-                                      }}>
-                                      <Icon name={st.icon} size={11}/>
-                                    </button>
+                                    <button key={st.id} onClick={() => updateYMetric(idx,{comboType:st.id})} title={st.label} className="btn" style={{
+                                      padding:'2px 6px', fontSize:'11px', height:'auto', gap:3,
+                                      background: m.comboType===st.id ? 'var(--accent-light)' : 'transparent',
+                                      color: m.comboType===st.id ? 'var(--accent)' : 'var(--text-tertiary)',
+                                      border: `1px solid ${m.comboType===st.id ? 'var(--accent)' : 'var(--border)'}`,
+                                    }}><Icon name={st.icon} size={11}/></button>
                                   ))}
                                 </div>
                               )}
@@ -3192,25 +3231,16 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                                 <Icon name="close" size={11}/>
                               </button>
                             </div>
-                            {/* Aggregation selector */}
-                            <select
-                              className="form-input"
-                              style={{fontSize:'11.5px',padding:'3px 6px',width:'100%'}}
-                              value={m.agg}
-                              onChange={e => updateYMetric(idx,{agg:e.target.value})}>
-                              {aggOpts.map(o => (
-                                <option key={o.id} value={o.id}>{o.label}</option>
-                              ))}
+                            <select className="form-input" style={{fontSize:'11.5px',padding:'3px 6px',width:'100%'}} value={m.agg} onChange={e => updateYMetric(idx,{agg:e.target.value})}>
+                              {aggOpts.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                             </select>
                           </div>
                         );
                       })
                   }
                 </div>
-              )}
 
-              {/* ── Group By (optional, axis charts only) ── */}
-              {hasAxis && (
+                {/* Group By */}
                 <div className="config-zone">
                   <div className="config-zone-title">Group By <span style={{fontWeight:400,color:'var(--text-tertiary)'}}>(optional)</span></div>
                   <div className={`drop-target${groupBy.length>0?' has-items':''}`}>
@@ -3218,34 +3248,168 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                     : groupBy.map(f => <span key={f} className="dropped-field" onClick={() => setGroupBy(a => a.filter(x => x !== f))}>{f} ×</span>)}
                   </div>
                 </div>
-              )}
 
-              <div className="divider"/>
-              <div className="builder-section-title" style={{padding:'0 var(--space-sm)'}}>Available Fields</div>
-              {currentTable?.cols.map(c => {
-                const inX = xAxis === c.name;
-                const inY = yMetrics.some(m => m.field === c.name);
-                const selected = inX || inY;
-                return (
-                  <div key={c.name} className={`field-item${selected?' selected':''}`}
-                    onClick={() => {
-                      if (!hasAxis) return; // no axis config for pie/kpi/table
-                      if (inX) { setXAxis(''); return; }
-                      if (inY) { removeYMetric(yMetrics.findIndex(m => m.field === c.name)); return; }
-                      // Decide: if no X axis set and not numeric, put in X
-                      if (!xAxis && c.type !== 'num') { setXAxis(c.name); }
-                      // Otherwise add to Y metrics
-                      else { addYMetric(c.name, c.type); }
-                    }}>
-                    <span style={{fontSize:'12.5px'}}>{c.name}</span>
-                    <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:'auto'}}>
-                      {inX && <span style={{fontSize:'10px',color:'var(--accent)',fontWeight:600,background:'var(--accent-light)',padding:'1px 5px',borderRadius:3}}>X</span>}
-                      {inY && <span style={{fontSize:'10px',color:'#16a34a',fontWeight:600,background:'#dcfce7',padding:'1px 5px',borderRadius:3}}>Y</span>}
-                      <span className={`field-type ${c.type}`}>{c.type}</span>
-                    </span>
+                <div className="divider"/>
+                <div className="builder-section-title" style={{padding:'0 var(--space-sm)'}}>Available Fields</div>
+
+                {/* Row Count — always first */}
+                {(() => {
+                  const inY = yMetrics.some(m => m.field === 'Row Count');
+                  return (
+                    <div className={`field-item${inY?' selected':''}`}
+                      onClick={() => { if (inY) removeYMetric(yMetrics.findIndex(m => m.field==='Row Count')); else addYMetric('Row Count'); }}>
+                      <span style={{fontSize:'12px',fontStyle:'italic',color:'var(--text-secondary)'}}>Row Count</span>
+                      <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:'auto'}}>
+                        {inY && <span style={{fontSize:'10px',color:'#16a34a',fontWeight:600,background:'#dcfce7',padding:'1px 5px',borderRadius:3}}>Y</span>}
+                        <span className="field-type num">num</span>
+                      </span>
+                    </div>
+                  );
+                })()}
+
+                {currentTable?.cols.map(c => {
+                  const inX = xAxis === c.name;
+                  const inY = yMetrics.some(m => m.field === c.name);
+                  const isNumCol = c.type === 'num';
+                  return (
+                    <div key={c.name} className={`field-item${(inX||inY)?' selected':''}`}
+                      onClick={() => {
+                        if (inX) { setXAxis(''); return; }
+                        if (inY) { removeYMetric(yMetrics.findIndex(m => m.field===c.name)); return; }
+                        if (isNumCol) { addYMetric(c.name); }
+                        else { setXAxis(c.name); }
+                      }}>
+                      <span style={{fontSize:'12.5px'}}>{c.name}</span>
+                      <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:'auto'}}>
+                        {inX && <span style={{fontSize:'10px',color:'var(--accent)',fontWeight:600,background:'var(--accent-light)',padding:'1px 5px',borderRadius:3}}>X</span>}
+                        {inY && <span style={{fontSize:'10px',color:'#16a34a',fontWeight:600,background:'#dcfce7',padding:'1px 5px',borderRadius:3}}>Y</span>}
+                        <span className={`field-type ${c.type}`}>{c.type}</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </>}
+
+              {/* ══ PIE CHART ══ */}
+              {isPie && <>
+                <div className="divider"/>
+                {/* Measure = X (str/date cols) */}
+                <div className="config-zone">
+                  <div className="config-zone-title">Measure</div>
+                  <div className={`drop-target${xAxis?' has-items':''}`} style={{cursor:'default'}}>
+                    {!xAxis
+                      ? <span className="drop-placeholder">Click a column below…</span>
+                      : <span className="dropped-field" onClick={() => setXAxis('')}>{xAxis} ×</span>
+                    }
                   </div>
-                );
-              })}
+                </div>
+                {/* Summary = breakout dimension (str/date) */}
+                <div className="config-zone">
+                  <div className="config-zone-title">Summary</div>
+                  {yMetrics.length === 0
+                    ? <div className="drop-target"><span className="drop-placeholder">Click a column to break out…</span></div>
+                    : <>
+                        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8,padding:'6px 10px',background:'var(--accent-light)',border:'1px solid var(--accent)',borderRadius:'var(--radius-sm)'}}>
+                          <span style={{fontSize:'12px',fontWeight:600,color:'var(--accent)',flex:1}}>{yMetrics[0].field}</span>
+                          <button style={{background:'none',border:'none',color:'var(--accent)',cursor:'pointer',padding:2}} onClick={() => setYMetrics([])}>
+                            <Icon name="close" size={11}/>
+                          </button>
+                        </div>
+                        {/* Breakout value list */}
+                        {getPieBreakoutValues().map((val, i) => (
+                          <div key={val} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 10px',borderRadius:'var(--radius-sm)',marginBottom:3,border:'1px solid var(--border)',background:'var(--input-bg)'}}>
+                            <span style={{width:8,height:8,borderRadius:'50%',background:PIE_SLICE_COLORS[i%5],flexShrink:0}}/>
+                            <span style={{fontSize:'12px',color:'var(--text-primary)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val}</span>
+                            <Icon name="more" size={12} style={{color:'var(--text-tertiary)'}}/>
+                          </div>
+                        ))}
+                      </>
+                  }
+                </div>
+                <div className="divider"/>
+                <div className="builder-section-title" style={{padding:'0 var(--space-sm)'}}>Available Fields</div>
+                {currentTable?.cols.map(c => {
+                  const inX = xAxis === c.name;
+                  const inSum = yMetrics[0]?.field === c.name;
+                  return (
+                    <div key={c.name} className={`field-item${(inX||inSum)?' selected':''}`}
+                      onClick={() => {
+                        if (inX) { setXAxis(''); return; }
+                        if (inSum) { setYMetrics([]); return; }
+                        // Pie: Measure = any col for X, Summary = any col for breakout
+                        if (!xAxis) setXAxis(c.name);
+                        else if (yMetrics.length === 0) setYMetrics([{field:c.name, agg:'count', comboType:'bar'}]);
+                      }}>
+                      <span style={{fontSize:'12.5px'}}>{c.name}</span>
+                      <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:'auto'}}>
+                        {inX   && <span style={{fontSize:'10px',color:'var(--accent)',fontWeight:600,background:'var(--accent-light)',padding:'1px 5px',borderRadius:3}}>M</span>}
+                        {inSum && <span style={{fontSize:'10px',color:'#16a34a',fontWeight:600,background:'#dcfce7',padding:'1px 5px',borderRadius:3}}>S</span>}
+                        <span className={`field-type ${c.type}`}>{c.type}</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </>}
+
+              {/* ══ KPI ══ */}
+              {isKPI && <>
+                <div className="divider"/>
+                <div className="config-zone">
+                  <div className="config-zone-title">Metric <span style={{fontWeight:400,color:'var(--text-tertiary)',fontSize:'10px'}}>(numeric only)</span></div>
+                  {yMetrics.length === 0
+                    ? <div className="drop-target"><span className="drop-placeholder">Click a num column or Row Count…</span></div>
+                    : <div style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'8px 10px'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+                          <span style={{fontSize:'12px',fontWeight:600,color:'var(--text-primary)',flex:1}}>{yMetrics[0].field}</span>
+                          <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:2}} onClick={() => setYMetrics([])}>
+                            <Icon name="close" size={11}/>
+                          </button>
+                        </div>
+                        <select className="form-input" style={{fontSize:'11.5px',padding:'3px 6px',width:'100%'}} value={yMetrics[0].agg} onChange={e => updateYMetric(0,{agg:e.target.value})}>
+                          {Y_AGG_OPTIONS.filter(o => !o.requiresNum || yMetrics[0].field !== 'Row Count').map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                        </select>
+                      </div>
+                  }
+                </div>
+                <div className="divider"/>
+                <div className="builder-section-title" style={{padding:'0 var(--space-sm)'}}>Available Fields</div>
+                {/* Row Count always available */}
+                {(() => {
+                  const sel = yMetrics[0]?.field === 'Row Count';
+                  return (
+                    <div className={`field-item${sel?' selected':''}`}
+                      onClick={() => { if (sel) setYMetrics([]); else setYMetrics([{field:'Row Count',agg:'count',comboType:'bar'}]); }}>
+                      <span style={{fontSize:'12px',fontStyle:'italic',color:'var(--text-secondary)'}}>Row Count</span>
+                      <span className="field-type num">num</span>
+                    </div>
+                  );
+                })()}
+                {/* Only num cols */}
+                {currentTable?.cols.filter(c => c.type === 'num').map(c => {
+                  const sel = yMetrics[0]?.field === c.name;
+                  return (
+                    <div key={c.name} className={`field-item${sel?' selected':''}`}
+                      onClick={() => { if (sel) setYMetrics([]); else setYMetrics([{field:c.name, agg:'sum', comboType:'bar'}]); }}>
+                      <span style={{fontSize:'12.5px'}}>{c.name}</span>
+                      <span className={`field-type ${c.type}`}>{c.type}</span>
+                    </div>
+                  );
+                })}
+                {/* Show greyed-out non-numeric so user knows why they're not available */}
+                {currentTable?.cols.filter(c => c.type !== 'num').map(c => (
+                  <div key={c.name} className="field-item" style={{opacity:0.35, cursor:'not-allowed'}} title="Only numeric columns can be used as a KPI metric">
+                    <span style={{fontSize:'12.5px'}}>{c.name}</span>
+                    <span className={`field-type ${c.type}`}>{c.type}</span>
+                  </div>
+                ))}
+              </>}
+
+              {/* ══ TABLE ══ */}
+              {chartType === 'table' && <>
+                <div className="divider"/>
+                <div style={{padding:'var(--space-sm)',fontSize:'12px',color:'var(--text-secondary)'}}>All columns from the selected table will be shown. Use the Filters step to narrow results.</div>
+              </>}
+
             </div>
           </>}
 
