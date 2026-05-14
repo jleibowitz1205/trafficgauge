@@ -2847,6 +2847,12 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
   const [panelWidth, setPanelWidth] = useState(280);
   const resizeRef = React.useRef(null);
 
+  // display settings (step 4)
+  const [subtitle, setSubtitle] = useState('');
+  const [chartColor, setChartColor] = useState('#6384ff');
+  const [yAxisFormat, setYAxisFormat] = useState('number');
+  const [legendPos, setLegendPos] = useState('bottom');
+
   const onResizeMouseDown = (e) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -2935,9 +2941,173 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
     {source:'Referral',  value:53000,  value2:29000},
   ];
 
+  const formatYValue = (v) => {
+    if (yAxisFormat === 'currency') return `$${v >= 1000 ? (v/1000).toFixed(0)+'k' : v}`;
+    if (yAxisFormat === 'percent') return `${v}%`;
+    if (yAxisFormat === 'compact') return v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : `${v}`;
+    return `${v}`;
+  };
+
   const renderPreview = () => {
     const axisStyle = {background:'var(--card-bg)',border:'1px solid var(--border)',borderRadius:'8px',fontSize:'12px'};
+    const c1 = chartColor || 'var(--chart-1)';
     if (chartType === 'bar') return (
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={previewData} margin={{top:8,right:16,left:0,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+          <XAxis dataKey="source" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
+          <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
+          <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
+          <Bar dataKey="value" fill={c1} radius={[4,4,0,0]} name={yMetrics[0]?.field || 'Value'}/>
+          {yMetrics.length > 1 && <Bar dataKey="value2" fill="var(--chart-2)" radius={[4,4,0,0]} name={yMetrics[1]?.field || 'Value 2'}/>}
+        </BarChart>
+      </ResponsiveContainer>
+    );
+    if (chartType === 'row') return (
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={previewData} layout="vertical" margin={{top:8,right:16,left:8,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false}/>
+          <XAxis type="number" tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
+          <YAxis type="category" dataKey="source" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} width={72}/>
+          <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
+          <Bar dataKey="value" fill={c1} radius={[0,4,4,0]} name={yMetrics[0]?.field || 'Value'}/>
+          {yMetrics.length > 1 && <Bar dataKey="value2" fill="var(--chart-2)" radius={[0,4,4,0]} name={yMetrics[1]?.field || 'Value 2'}/>}
+        </BarChart>
+      </ResponsiveContainer>
+    );
+    if (chartType === 'line') return (
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={monthlyLeads} margin={{top:8,right:16,left:-10,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+          <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
+          <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
+          <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
+          <Area type="monotone" dataKey="leads" stroke={c1} strokeWidth={2} fill="transparent" dot={false} name={yMetrics[0]?.field || 'Leads'}/>
+          {yMetrics.length > 1 && <Area type="monotone" dataKey="sales" stroke="var(--chart-2)" strokeWidth={2} fill="transparent" dot={false} name={yMetrics[1]?.field || 'Sales'}/>}
+        </AreaChart>
+      </ResponsiveContainer>
+    );
+    if (chartType === 'area') return (
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={monthlyLeads} margin={{top:8,right:16,left:-10,bottom:0}}>
+          <defs>
+            <linearGradient id="rbAreaGrad1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={c1} stopOpacity={0.25}/>
+              <stop offset="95%" stopColor={c1} stopOpacity={0}/>
+            </linearGradient>
+            <linearGradient id="rbAreaGrad2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.25}/>
+              <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+          <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
+          <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
+          <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
+          <Area type="monotone" dataKey="leads" stroke={c1} strokeWidth={2} fill="url(#rbAreaGrad1)" dot={false} name={yMetrics[0]?.field || 'Leads'}/>
+          {yMetrics.length > 1 && <Area type="monotone" dataKey="sales" stroke="var(--chart-2)" strokeWidth={2} fill="url(#rbAreaGrad2)" dot={false} name={yMetrics[1]?.field || 'Sales'}/>}
+        </AreaChart>
+      </ResponsiveContainer>
+    );
+    if (chartType === 'combo') {
+      const barSeries  = yMetrics.filter(m => m.comboType === 'bar');
+      const lineSeries = yMetrics.filter(m => m.comboType === 'line' || m.comboType === 'area');
+      const chartColors = [c1,'var(--chart-2)','var(--chart-3)','var(--chart-4)','var(--chart-5)'];
+      return (
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={monthlyLeads} margin={{top:8,right:16,left:-10,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+            <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
+            <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
+            <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
+            <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize:'11px'}}/>
+            {barSeries.map((m,i) => (
+              <Bar key={m.field+i} dataKey={['leads','sales','revenue'][i] || 'leads'} fill={chartColors[yMetrics.indexOf(m) % 5]} radius={[4,4,0,0]} name={m.field}/>
+            ))}
+            {lineSeries.map((m,i) => (
+              <Line key={m.field+i} type="monotone" dataKey={['revenue','leads','sales'][i] || 'leads'} stroke={chartColors[(barSeries.length + i) % 5]} strokeWidth={2} dot={false} name={m.field}/>
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    }
+    if (chartType === 'pie') {
+      const breakoutVals = getPieBreakoutValues();
+      const pieData = breakoutVals.length > 0
+        ? breakoutVals.map((v,i) => ({name: v, value: [54, 43, 2, 1][i] || Math.floor(50/breakoutVals.length)}))
+        : trafficBySource.map(s => ({name:s.name, value:s.value}));
+      const total = pieData.reduce((a,d) => a + d.value, 0);
+      // Build slice colors: first slice uses chartColor, rest use chart-2..5
+      const PIE_DYNAMIC = [c1,'var(--chart-2)','var(--chart-3)','var(--chart-4)','var(--chart-5)'];
+      return (
+        <div style={{display:'flex',alignItems:'center',height:'100%',gap:32}}>
+          <div style={{minWidth:220,display:'flex',flexDirection:'column',gap:10}}>
+            {pieData.map((d,i) => {
+              const pct = total > 0 ? ((d.value/total)*100).toFixed(2)+'%' : '0.00%';
+              return (
+                <div key={d.name} style={{display:'flex',alignItems:'center',gap:8,fontSize:'13px',color:'var(--text-primary)'}}>
+                  <span style={{width:10,height:10,borderRadius:'50%',background:PIE_DYNAMIC[i%5],flexShrink:0}}/>
+                  <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.name}</span>
+                  <span style={{fontWeight:600,color:'var(--text-secondary)',minWidth:52,textAlign:'right'}}>{pct}</span>
+                </div>
+              );
+            })}
+          </div>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={pieData} cx="50%" cy="50%" innerRadius="42%" outerRadius="72%" paddingAngle={2} dataKey="value"
+                label={({cx,cy,midAngle,innerRadius,outerRadius,percent}) => {
+                  if (percent < 0.04) return null;
+                  const R = Math.PI/180, r = innerRadius+(outerRadius-innerRadius)*0.5;
+                  const x = cx + r*Math.cos(-midAngle*R), y = cy + r*Math.sin(-midAngle*R);
+                  return <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>{(percent*100).toFixed(1)}%</text>;
+                }} labelLine={false}>
+                {pieData.map((_,i) => <Cell key={i} fill={PIE_DYNAMIC[i%5]}/>)}
+              </Pie>
+              <Tooltip contentStyle={{background:'var(--card-bg)',border:'1px solid var(--border)',borderRadius:'8px',fontSize:'12px'}}/>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
+    if (chartType === 'number') {
+      const kpiField = yMetrics[0]?.field || 'Row Count';
+      const aggLabel = {count:'Count of rows',sum:'Sum of',avg:'Avg of',distinct:'Distinct',min:'Min of',max:'Max of'}[yMetrics[0]?.agg || 'count'];
+      const kpiLabel = kpiField === 'Row Count' ? 'Total Row Count' : `${aggLabel} ${kpiField}`;
+      const rawVal = 15280;
+      return (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:8}}>
+          <div style={{fontFamily:'var(--font-display)',fontSize:'64px',fontWeight:700,color:c1,letterSpacing:'-2px',lineHeight:1}}>
+            {formatYValue(rawVal)}
+          </div>
+          <div style={{fontSize:'14px',color:'var(--text-secondary)',fontWeight:500}}>{kpiLabel}</div>
+          <div className="kpi-delta up" style={{marginTop:4}}><Icon name="arrowUp" size={11}/>+18.4% vs last period</div>
+        </div>
+      );
+    }
+    if (chartType === 'table') {
+      const cols = tableColumns.length > 0 ? tableColumns : ['Source','Est. Value'];
+      return (
+        <div style={{overflowX:'auto',height:'100%',overflowY:'auto'}}>
+          <table className="data-table">
+            <thead><tr>{cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
+            <tbody>
+              {previewData.map((r,ri) => (
+                <tr key={ri}>{cols.map(c => <td key={c}>{c==='Row Count'?ri+1:c==='Source'?r.source:formatYValue(r.value)}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+    return (
+      <div className="empty-state">
+        <div className="empty-icon">📊</div>
+        <div className="empty-title">Chart preview</div>
+        <div className="empty-desc">Select fields to see a preview</div>
+      </div>
+    );
+  };
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={previewData} margin={{top:8,right:16,left:0,bottom:0}}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
@@ -3843,29 +4013,87 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
             <div className="builder-panel-body">
               <div className="form-group">
                 <label className="form-label">Chart Title</label>
-                <input className="form-input" value={reportName} onChange={e => setReportName(e.target.value)}/>
+                <input className="form-input" value={reportName} onChange={e => setReportName(e.target.value)} placeholder="Enter chart title"/>
               </div>
               <div className="form-group">
                 <label className="form-label">Subtitle</label>
-                <input className="form-input" defaultValue="Estimated deal value by acquisition channel"/>
+                <input className="form-input" value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="Optional subtitle…"/>
               </div>
+
+              {/* ── Color Theme ── */}
               <div className="form-group">
-                <label className="form-label">Color Theme</label>
-                <select className="form-input">
-                  <option>Brand Blue</option><option>Green</option><option>Warm</option><option>Categorical</option>
-                </select>
+                <label className="form-label">Primary Color</label>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                  {/* Native color picker */}
+                  <div style={{position:'relative',width:36,height:36,flexShrink:0}}>
+                    <input type="color" value={chartColor} onChange={e=>setChartColor(e.target.value)}
+                      style={{position:'absolute',inset:0,width:'100%',height:'100%',opacity:0,cursor:'pointer',padding:0,border:'none'}}/>
+                    <div style={{width:36,height:36,borderRadius:8,background:chartColor,border:'2px solid var(--border)',cursor:'pointer',boxShadow:'0 1px 3px rgba(0,0,0,0.12)'}}/>
+                  </div>
+                  {/* Hex input */}
+                  <input className="form-input" style={{flex:1,fontFamily:'monospace',fontSize:'13px',letterSpacing:'0.04em'}}
+                    value={chartColor}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setChartColor(v);
+                    }}
+                    maxLength={7}
+                    placeholder="#6384ff"
+                  />
+                </div>
+                {/* Preset swatches */}
+                <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:4}}>
+                  {['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9',
+                    '#f97316','#64748b','#1e293b','#be185d','#065f46','#7c3aed','#b45309','#0369a1'].map(hex => (
+                    <button key={hex} onClick={()=>setChartColor(hex)} title={hex}
+                      style={{
+                        width:'100%',aspectRatio:'1',borderRadius:5,background:hex,border:'none',cursor:'pointer',
+                        outline: chartColor===hex ? '2px solid var(--text-primary)' : '2px solid transparent',
+                        outlineOffset:1,transition:'outline 0.1s',
+                      }}/>
+                  ))}
+                </div>
               </div>
+
+              {/* ── Y-Axis Format ── */}
               <div className="form-group">
                 <label className="form-label">Y-Axis Format</label>
-                <select className="form-input">
-                  <option>Currency ($)</option><option>Number</option><option>Percentage (%)</option><option>Compact (1K, 1M)</option>
-                </select>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+                  {[
+                    {id:'number',   label:'Number',      example:'1,234'},
+                    {id:'currency', label:'Currency ($)', example:'$1,234'},
+                    {id:'percent',  label:'Percentage',  example:'42%'},
+                    {id:'compact',  label:'Compact',     example:'1.2K'},
+                  ].map(fmt => (
+                    <button key={fmt.id} onClick={()=>setYAxisFormat(fmt.id)}
+                      style={{
+                        padding:'7px 10px',borderRadius:'var(--radius-sm)',cursor:'pointer',textAlign:'left',
+                        border:`1.5px solid ${yAxisFormat===fmt.id?'var(--accent)':'var(--border)'}`,
+                        background: yAxisFormat===fmt.id?'var(--accent-light)':'var(--input-bg)',
+                        transition:'all 0.15s',
+                      }}>
+                      <div style={{fontSize:'11.5px',fontWeight:600,color:yAxisFormat===fmt.id?'var(--accent)':'var(--text-primary)'}}>{fmt.label}</div>
+                      <div style={{fontSize:'10px',color:'var(--text-tertiary)',marginTop:2,fontFamily:'monospace'}}>{fmt.example}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* ── Legend ── */}
               <div className="form-group">
                 <label className="form-label">Legend</label>
-                <select className="form-input">
-                  <option>Bottom</option><option>Right</option><option>Hidden</option>
-                </select>
+                <div style={{display:'flex',gap:6}}>
+                  {[{id:'bottom',label:'Bottom'},{id:'right',label:'Right'},{id:'hidden',label:'Hidden'}].map(opt => (
+                    <button key={opt.id} onClick={()=>setLegendPos(opt.id)}
+                      style={{
+                        flex:1,padding:'5px 8px',borderRadius:'var(--radius-sm)',cursor:'pointer',fontSize:'12px',fontWeight:500,
+                        border:`1.5px solid ${legendPos===opt.id?'var(--accent)':'var(--border)'}`,
+                        background: legendPos===opt.id?'var(--accent-light)':'var(--input-bg)',
+                        color: legendPos===opt.id?'var(--accent)':'var(--text-secondary)',
+                        transition:'all 0.15s',
+                      }}>{opt.label}</button>
+                  ))}
+                </div>
               </div>
             </div>
           </>}
@@ -3882,13 +4110,18 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
           </div>
           <div style={{flex:1,padding:'var(--space-lg)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
             <div className="card" style={{flex:1,padding:'var(--space-lg)',overflow:'hidden'}}>
-              <div style={{fontFamily:'var(--font-display)',fontSize:'15px',fontWeight:600,color:'var(--text-primary)',marginBottom:4}}>
-                {reportName}
+              <div style={{fontFamily:'var(--font-display)',fontSize:'15px',fontWeight:600,color:'var(--text-primary)',marginBottom: subtitle ? 2 : 4}}>
+                {reportName || 'Untitled Report'}
               </div>
-              <div style={{fontSize:'12px',color:'var(--text-secondary)',marginBottom:'var(--space-md)'}}>
+              {subtitle && (
+                <div style={{fontSize:'12px',color:'var(--text-secondary)',marginBottom:4,lineHeight:1.4}}>
+                  {subtitle}
+                </div>
+              )}
+              <div style={{fontSize:'11px',color:'var(--text-tertiary)',marginBottom:'var(--space-md)'}}>
                 {currentDB?.name} · {selectedTable}
               </div>
-              <div style={{height:'calc(100% - 60px)'}}>
+              <div style={{height:`calc(100% - ${subtitle ? 78 : 62}px)`}}>
                 {renderPreview()}
               </div>
             </div>
