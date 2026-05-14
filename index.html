@@ -3092,10 +3092,19 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
     }
     if (chartType === 'combo') {
       const tsData = getTimeSeriesData();
+      // Generate varied but scale-consistent values for each series
+      // so all bars/lines are visible regardless of how many metrics are added
+      const seriesSeeds = [
+        (d) => d.leads,
+        (d) => Math.round(d.leads * 0.72 + 15),
+        (d) => Math.round(d.leads * 0.54 + 30),
+        (d) => Math.round(d.leads * 0.38 + 20),
+        (d) => Math.round(d.leads * 0.85 - 10),
+      ];
       const comboData = tsData.map(d => {
         const row = {label: d.label};
         yMetrics.forEach((m, i) => {
-          row[`series_${i}`] = [d.leads, d.sales, d.revenue/10000][i % 3] ?? d.leads;
+          row[`series_${i}`] = seriesSeeds[i % seriesSeeds.length](d);
         });
         return row;
       });
