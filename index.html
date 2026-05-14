@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>TrafficGauge — Reporting</title>
+<title>Convergence — Reporting</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
@@ -16,41 +16,54 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body, #root { height: 100%; width: 100%; overflow: hidden; }
-  body { font-family: 'DM Sans', sans-serif; background: #f5f4f1; }
+  body { font-family: 'Inter', sans-serif; background: #EFEDE8; }
 
   :root {
-    --font-display: 'Outfit', sans-serif;
-    --font-body: 'DM Sans', sans-serif;
+    /* Convergence Brand Fonts */
+    --font-display: 'Rubik', sans-serif;
+    --font-subheading: 'Inter Tight', sans-serif;
+    --font-body: 'Inter', sans-serif;
 
-    /* Theme A: Slate + Cobalt (default) */
-    --sidebar-bg: #1e2433;
-    --sidebar-text: #c8cdd8;
-    --sidebar-active-bg: rgba(99,132,255,0.15);
-    --sidebar-active-text: #6384ff;
+    /* Convergence Brand Colors */
+    --brand-electric: #5E10BC;
+    --brand-electric-deep: #4a0d96;
+    --brand-neon: #80E55C;
+    --brand-citrine: #F7E749;
+    --brand-jet: #000000;
+    --brand-lavender: #D4C9F4;
+    --brand-mint: #ADF792;
+    --brand-purple-mid: #7E54D9;
+    --brand-off-white: #EFEDE8;
+
+    /* Theme A: Convergence (default) */
+    --sidebar-bg: #0d0a14;
+    --sidebar-text: #b8aed4;
+    --sidebar-active-bg: rgba(94,16,188,0.22);
+    --sidebar-active-text: #c49dff;
     --sidebar-hover-bg: rgba(255,255,255,0.06);
-    --accent: #6384ff;
-    --accent-light: #eef0ff;
-    --accent-dark: #3d5ce6;
-    --canvas-bg: #f5f4f1;
+    --accent: #5E10BC;
+    --accent-light: #ede7f9;
+    --accent-dark: #4a0d96;
+    --canvas-bg: #EFEDE8;
     --card-bg: #ffffff;
-    --card-border: #e8e6e1;
+    --card-border: #e2dfd8;
     --card-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
-    --card-shadow-hover: 0 2px 8px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.08);
-    --text-primary: #1a1c22;
-    --text-secondary: #6b7080;
-    --text-tertiary: #9ca3af;
-    --border: #e8e6e1;
-    --input-bg: #fafaf9;
-    --badge-bg: #f0f0f0;
-    --badge-text: #6b7080;
-    --success: #22c55e;
-    --warning: #f59e0b;
+    --card-shadow-hover: 0 2px 8px rgba(94,16,188,0.10), 0 8px 24px rgba(94,16,188,0.08);
+    --text-primary: #0d0a14;
+    --text-secondary: #6b6480;
+    --text-tertiary: #9c96ae;
+    --border: #e2dfd8;
+    --input-bg: #faf9f7;
+    --badge-bg: #f0edf8;
+    --badge-text: #6b6480;
+    --success: #3db832;
+    --warning: #d4a800;
     --danger: #ef4444;
-    --chart-1: #6384ff;
-    --chart-2: #22c55e;
-    --chart-3: #f59e0b;
-    --chart-4: #ec4899;
-    --chart-5: #14b8a6;
+    --chart-1: #5E10BC;
+    --chart-2: #80E55C;
+    --chart-3: #F7E749;
+    --chart-4: #7E54D9;
+    --chart-5: #ADF792;
 
     /* Density */
     --space-xs: 4px;
@@ -64,45 +77,50 @@
     --sidebar-width: 240px;
   }
 
-  /* Theme B: Warm Sage */
+  /* Theme B: Neon — electric green accent */
   [data-theme="sage"] {
-    --sidebar-bg: #1f2d1f;
-    --sidebar-text: #b8ccb8;
-    --sidebar-active-bg: rgba(74,185,96,0.15);
-    --sidebar-active-text: #4ab960;
+    --sidebar-bg: #0a140d;
+    --sidebar-text: #a8c4a8;
+    --sidebar-active-bg: rgba(128,229,92,0.15);
+    --sidebar-active-text: #80E55C;
     --sidebar-hover-bg: rgba(255,255,255,0.06);
-    --accent: #4ab960;
-    --accent-light: #edfbf0;
-    --accent-dark: #2d9b47;
-    --chart-1: #4ab960;
-    --chart-2: #6384ff;
-    --chart-3: #f59e0b;
-    --chart-4: #ec4899;
-    --chart-5: #14b8a6;
+    --accent: #3db832;
+    --accent-light: #edfbe8;
+    --accent-dark: #2a9020;
+    --chart-1: #80E55C;
+    --chart-2: #5E10BC;
+    --chart-3: #F7E749;
+    --chart-4: #7E54D9;
+    --chart-5: #ADF792;
   }
 
   /* Theme C: Dark mode */
   [data-theme="dark"] {
-    --sidebar-bg: #111318;
-    --sidebar-text: #8b909e;
-    --sidebar-active-bg: rgba(99,132,255,0.18);
-    --sidebar-active-text: #7b9aff;
+    --sidebar-bg: #07050f;
+    --sidebar-text: #8b80a8;
+    --sidebar-active-bg: rgba(94,16,188,0.25);
+    --sidebar-active-text: #c49dff;
     --sidebar-hover-bg: rgba(255,255,255,0.05);
-    --accent: #7b9aff;
-    --accent-light: rgba(99,132,255,0.12);
-    --accent-dark: #5575e6;
-    --canvas-bg: #181b23;
-    --card-bg: #1e2230;
-    --card-border: #2a2f3f;
-    --card-shadow: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
-    --card-shadow-hover: 0 2px 8px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
-    --text-primary: #e8eaf0;
-    --text-secondary: #8b909e;
-    --text-tertiary: #5a5f70;
-    --border: #2a2f3f;
-    --input-bg: #1a1d28;
-    --badge-bg: #2a2f3f;
-    --badge-text: #8b909e;
+    --accent: #7E54D9;
+    --accent-light: rgba(94,16,188,0.15);
+    --accent-dark: #5E10BC;
+    --canvas-bg: #0f0c1a;
+    --card-bg: #1a1528;
+    --card-border: #2a2040;
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+    --card-shadow-hover: 0 2px 8px rgba(94,16,188,0.3), 0 8px 24px rgba(94,16,188,0.2);
+    --text-primary: #ede8fa;
+    --text-secondary: #8b80a8;
+    --text-tertiary: #5a5070;
+    --border: #2a2040;
+    --input-bg: #150f22;
+    --badge-bg: #2a2040;
+    --badge-text: #8b80a8;
+    --chart-1: #7E54D9;
+    --chart-2: #80E55C;
+    --chart-3: #F7E749;
+    --chart-4: #c49dff;
+    --chart-5: #ADF792;
   }
 
   /* Density overrides */
@@ -139,6 +157,7 @@
     width: var(--sidebar-width);
     min-width: var(--sidebar-width);
     background: var(--sidebar-bg);
+    background-image: linear-gradient(180deg, rgba(94,16,188,0.08) 0%, transparent 30%);
     display: flex;
     flex-direction: column;
     transition: width 0.25s cubic-bezier(0.4,0,0.2,1), min-width 0.25s cubic-bezier(0.4,0,0.2,1);
@@ -153,7 +172,8 @@
     align-items: center;
     gap: var(--space-sm);
     padding: 18px var(--space-md);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-top: 2px solid #5E10BC;
     flex-shrink: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -175,7 +195,7 @@
   }
   .logo-name {
     font-family: var(--font-display);
-    font-weight: 600;
+    font-weight: 700;
     font-size: 15px;
     color: #ffffff;
     letter-spacing: -0.3px;
@@ -196,7 +216,7 @@
   .nav-section-label {
     font-size: 10px;
     font-weight: 600;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
     color: rgba(255,255,255,0.25);
     padding: var(--space-md) var(--space-md) var(--space-xs);
@@ -225,6 +245,8 @@
     background: var(--sidebar-active-bg);
     color: var(--sidebar-active-text);
     font-weight: 500;
+    border-left: 2px solid var(--accent);
+    padding-left: calc(var(--space-md) - 2px);
   }
   .nav-item .nav-icon {
     width: 16px;
@@ -263,7 +285,7 @@
   .avatar {
     width: 28px;
     height: 28px;
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+    background: linear-gradient(135deg, #5E10BC 0%, #7E54D9 100%);
     border-radius: 50%;
     flex-shrink: 0;
     display: flex;
@@ -319,7 +341,7 @@
   .topbar-title {
     font-family: var(--font-display);
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-primary);
     flex: 1;
   }
@@ -338,7 +360,7 @@
   }
   .search-box:focus-within {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(99,132,255,0.12);
+    box-shadow: 0 0 0 3px rgba(94,16,188,0.12);
   }
   .search-box input {
     border: none;
@@ -369,7 +391,7 @@
     background: var(--accent);
     color: white;
   }
-  .btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,132,255,0.3); }
+  .btn-primary:hover { background: var(--accent-dark); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(94,16,188,0.35); }
   .btn-ghost {
     background: transparent;
     color: var(--text-secondary);
@@ -443,7 +465,7 @@
   .dash-card-title {
     font-family: var(--font-display);
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-primary);
   }
   .dash-card-subtitle { font-size: 12px; color: var(--text-secondary); }
@@ -474,13 +496,13 @@
     margin-bottom: var(--space-lg);
   }
   .kpi-card { padding: var(--space-md) var(--space-lg); }
-  .kpi-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-xs); }
+  .kpi-label { font-size: 11px; font-family: var(--font-subheading); color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-xs); }
   .kpi-value {
     font-family: var(--font-display);
     font-size: 28px;
-    font-weight: 700;
+    font-weight: 800;
     color: var(--text-primary);
-    letter-spacing: -1px;
+    letter-spacing: -1.5px;
     line-height: 1;
     margin-bottom: 6px;
   }
@@ -493,7 +515,7 @@
     padding: 2px 7px;
     border-radius: 20px;
   }
-  .kpi-delta.up { color: #16a34a; background: #dcfce7; }
+  .kpi-delta.up { color: #237a1c; background: #e8fde3; }
   .kpi-delta.down { color: #dc2626; background: #fee2e2; }
 
   /* Chart containers */
@@ -516,12 +538,12 @@
     margin-bottom: var(--space-md);
   }
   .chart-title {
-    font-family: var(--font-display);
+    font-family: var(--font-subheading);
     font-size: 13.5px;
     font-weight: 600;
     color: var(--text-primary);
   }
-  .chart-subtitle { font-size: 11.5px; color: var(--text-secondary); margin-top: 2px; }
+  .chart-subtitle { font-size: 11.5px; color: var(--text-secondary); margin-top: 2px; font-family: var(--font-subheading); }
   .chart-actions { display: flex; gap: 4px; }
   .chart-action-btn {
     width: 26px;
@@ -905,7 +927,7 @@
     transition: border-color 0.15s, box-shadow 0.15s;
     outline: none;
   }
-  .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,132,255,0.12); }
+  .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94,16,188,0.12); }
 
   select.form-input { cursor: pointer; }
 
@@ -1026,7 +1048,7 @@ const inventoryByMake = [
   {make:'Kia',count:55},{make:'Jeep',count:48},
 ];
 const trafficBySource = [
-  {name:'Organic Search',value:38,color:'#6384ff'},
+  {name:'Organic Search',value:38,color:'#5E10BC'},
   {name:'Direct',value:24,color:'#22c55e'},
   {name:'Paid Search',value:18,color:'#f59e0b'},
   {name:'Social',value:12,color:'#ec4899'},
@@ -1050,7 +1072,7 @@ const TABLE_ROWS = [
 ];
 
 const DASHBOARDS = [
-  {id:1,name:'Sales Performance',desc:'Leads, conversions, and revenue by month',tags:['Transactions','Phone Calls'],views:124,updated:'2h ago',starred:true,color:'#6384ff'},
+  {id:1,name:'Sales Performance',desc:'Leads, conversions, and revenue by month',tags:['Transactions','Phone Calls'],views:124,updated:'2h ago',starred:true,color:'#5E10BC'},
   {id:2,name:'Inventory Overview',desc:'Vehicle stock by make, model, and age',tags:['Transactions'],views:89,updated:'1d ago',starred:false,color:'#22c55e'},
   {id:3,name:'Web Traffic Analytics',desc:'Traffic sources, sessions, and conversion funnels',tags:['Link Clicks','Messages'],views:67,updated:'3d ago',starred:true,color:'#f59e0b'},
   {id:4,name:'Service Department',desc:'Work orders, revenue, and technician throughput',tags:['Service Appointments','Phone Calls'],views:45,updated:'1w ago',starred:false,color:'#ec4899'},
@@ -1335,7 +1357,7 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
         )}
       </div>
 
-      {showNew && <NewDashboardModal savedReports={savedReports} onClose={() => setShowNew(false)} onCreate={(name, desc, report) => { setShowNew(false); const dashData = {id: Date.now(), name, desc: desc || (report ? report.desc : 'New dashboard'), tags: report ? report.tags : [], color: report ? report.color : '#6384ff', report, userCreated: true, createdAt: Date.now()}; onCreateDashboard(dashData); }} />}
+      {showNew && <NewDashboardModal savedReports={savedReports} onClose={() => setShowNew(false)} onCreate={(name, desc, report) => { setShowNew(false); const dashData = {id: Date.now(), name, desc: desc || (report ? report.desc : 'New dashboard'), tags: report ? report.tags : [], color: report ? report.color : '#5E10BC', report, userCreated: true, createdAt: Date.now()}; onCreateDashboard(dashData); }} />}
     </div>
   );
 };
@@ -1796,7 +1818,7 @@ const DateRangeDropdown = ({ pos, filter, onClose, onApply }) => {
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
             <input type="number" min={1} value={relAmount} onChange={e=>setRelAmount(e.target.value)}
               style={{width:60,padding:'6px 8px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',fontSize:'14px',fontWeight:500,color:'var(--text-primary)',background:'var(--input-bg)',outline:'none',textAlign:'center',fontFamily:'var(--font-body)'}}
-              onFocus={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.boxShadow='0 0 0 3px rgba(99,132,255,0.12)';}}
+              onFocus={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.boxShadow='0 0 0 3px rgba(94,16,188,0.12)';}}
               onBlur={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.boxShadow='none';}}
             />
             <select value={relUnit} onChange={e=>setRelUnit(e.target.value)} style={{flex:1,padding:'6px 8px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',fontSize:'13px',color:'var(--text-primary)',background:'var(--input-bg)',cursor:'pointer',outline:'none',fontFamily:'var(--font-body)'}}>
@@ -2885,14 +2907,14 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport, editReport }) => 
   // display settings (step 4)
   const [subtitle, setSubtitle] = useState(editReport?.subtitle || '');
   // seriesColors[i] = hex color for series/slice i
-  const [seriesColors, setSeriesColors] = useState(editReport?.seriesColors || ['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6']);
+  const [seriesColors, setSeriesColors] = useState(editReport?.seriesColors || ['#5E10BC','#22c55e','#f59e0b','#ec4899','#14b8a6']);
   const [selectedSeriesIdx, setSelectedSeriesIdx] = useState(0);
   const [yAxisFormat, setYAxisFormat] = useState(editReport?.yAxisFormat || 'number');
   const [legendPos, setLegendPos] = useState(editReport?.legendPos || 'bottom');
   const [showDataPoints, setShowDataPoints] = useState(editReport?.showDataPoints || false);
 
   // Helper: get color for a series index, falling back through defaults
-  const DEFAULT_COLORS = ['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9'];
+  const DEFAULT_COLORS = ['#5E10BC','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9'];
   const getSeriesColor = (i) => seriesColors[i] || DEFAULT_COLORS[i % DEFAULT_COLORS.length];
   const setSeriesColor = (i, hex) => setSeriesColors(prev => {
     const next = [...prev];
@@ -3385,7 +3407,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport, editReport }) => 
               name: reportName,
               desc: `${currentDB?.name} · ${selectedTable}`,
               tags: [currentDB?.name].filter(Boolean),
-              color: '#6384ff',
+              color: '#5E10BC',
               chartType,
               db: selectedDB,
               table: selectedTable,
@@ -4025,7 +4047,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport, editReport }) => 
                       onClick={()=>setFilters(f=>[...f,makeFilter(allCols[0].name)])}>
                       <Icon name="plus" size={12}/> Add Filter
                     </button>
-                    <button className="btn btn-ghost" style={{flex:1,justifyContent:'center',fontSize:'12px',color:'var(--accent)',borderColor:'rgba(99,132,255,0.4)'}}
+                    <button className="btn btn-ghost" style={{flex:1,justifyContent:'center',fontSize:'12px',color:'var(--accent)',borderColor:'rgba(94,16,188,0.4)'}}
                       onClick={()=>setFilters(f=>[...f,makeGroup()])}>
                       <Icon name="plus" size={12}/> Add Group
                     </button>
@@ -4137,7 +4159,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport, editReport }) => 
                           style={{flex:1,fontFamily:'monospace',fontSize:'13px',letterSpacing:'0.04em'}}
                           value={activeColor}
                           maxLength={7}
-                          placeholder="#6384ff"
+                          placeholder="#5E10BC"
                           onChange={e => {
                             const v = e.target.value;
                             if (/^#[0-9a-fA-F]{0,6}$/.test(v)) setSeriesColor(selectedSeriesIdx, v);
@@ -4146,7 +4168,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport, editReport }) => 
                       </div>
                       {/* Preset swatches */}
                       <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:4}}>
-                        {['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9',
+                        {['#5E10BC','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9',
                           '#f97316','#64748b','#1e293b','#be185d','#065f46','#7c3aed','#b45309','#0369a1'].map(hex => (
                           <button key={hex} onClick={()=>setSeriesColor(selectedSeriesIdx,hex)} title={hex}
                             style={{
@@ -4298,7 +4320,7 @@ const Sidebar = ({ screen, navigate, sidebarMode }) => {
     <nav className={`sidebar${collapsed?' collapsed':''}${hidden?' hidden':''}`}>
       <div className="sidebar-logo" style={{justifyContent: collapsed ? 'center' : 'flex-start'}}>
         {collapsed ? (
-          <div className="logo-mark">TG</div>
+          <div className="logo-mark" style={{background:"linear-gradient(135deg,#5E10BC,#7E54D9)",borderRadius:"8px",fontSize:"13px",letterSpacing:"-0.5px"}}>C</div>
         ) : (
           <img
             src="uploads/CONVRGE-TG_Logo-Primary_White_1200w.png"
@@ -4466,7 +4488,7 @@ const App = () => {
           <TweakSelect
             label="Color Theme"
             value={tweaks.theme}
-            options={[{label:'Cobalt (Default)',value:'default'},{label:'Sage Green',value:'sage'},{label:'Dark Mode',value:'dark'}]}
+            options={[{label:'Electric (Default)',value:'default'},{label:'Neon',value:'sage'},{label:'Dark Mode',value:'dark'}]}
             onChange={v => setTweak('theme', v)}
           />
         </TweakSection>
