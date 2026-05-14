@@ -557,12 +557,28 @@
   }
   .builder-sidebar {
     width: 280px;
-    min-width: 280px;
+    min-width: 200px;
+    max-width: 520px;
     background: var(--card-bg);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    flex-shrink: 0;
+  }
+  .builder-resize-handle {
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+    transition: background 0.15s;
+  }
+  .builder-resize-handle:hover,
+  .builder-resize-handle.dragging {
+    background: var(--accent);
+    opacity: 0.4;
   }
   .builder-main {
     flex: 1;
@@ -2827,6 +2843,27 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
   const [tableColumns, setTableColumns] = useState([]);
   // drag state for table column reordering
   const [dragIdx, setDragIdx] = useState(null);
+  // resizable panel
+  const [panelWidth, setPanelWidth] = useState(280);
+  const resizeRef = React.useRef(null);
+
+  const onResizeMouseDown = (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panelWidth;
+    const onMove = (me) => {
+      const next = Math.min(520, Math.max(200, startW + me.clientX - startX));
+      setPanelWidth(next);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (resizeRef.current) resizeRef.current.classList.remove('dragging');
+    };
+    if (resizeRef.current) resizeRef.current.classList.add('dragging');
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   const currentDB = DATABASES.find(d => d.id === selectedDB);
   const currentTable = currentDB?.tables.find(t => t.name === selectedTable);
@@ -3161,7 +3198,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
 
       <div className="builder-layout">
         {/* Left config panel */}
-        <div className="builder-sidebar">
+        <div className="builder-sidebar" style={{width:panelWidth, minWidth:200, maxWidth:520}}>
           {step === 1 && <>
             <div className="builder-panel-title">Data Source</div>
             <div className="builder-panel-body">
@@ -3599,7 +3636,6 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
           </>}
 
           {step === 3 && (() => {
-            // ── Operator definitions by column type ──────────────────────────
             const OPS = {
               str:  ['contains','does not contain','is','is not','starts with','ends with','is empty','is not empty'],
               num:  ['=','≠','>','<','≥','≤','is empty','is not empty'],
@@ -3638,47 +3674,21 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
             const makeGroup = () => ({
               id:Date.now()+Math.random(), type:'group',
               junction:'and',
-              innerJunction:'any', // 'any' = OR, 'all' = AND
               conditions:[],
             });
 
-            // Shared value input
-            const ValInput = ({f}) => {
-              if (NO_VALUE_OPS.includes(f.op)) return null;
-              const shared = {
-                className:'form-input',
-                style:{flex:1,minWidth:0,padding:'3px 7px',fontSize:'12px'},
-                value:f.val,
-                onChange:e=>updateFilter(f.id,{val:e.target.value}),
-                placeholder:'Enter a value',
-              };
-              if (f.colType==='date') return <input type="date" {...shared}/>;
-              if (f.colType==='num')  return <input type="number" {...shared} placeholder="Number"/>;
-              return <input {...shared}/>;
-            };
-
-            // A single filter condition row
-            // mode: 'top' (has "Where" label on first, junction dropdown on rest)
-            //       'inner' (inside a group — same but slightly indented)
-            const FilterRow = ({f, isFirst, onJunctionChange, onRemove, indent=false}) => {
+            // Render a single filter row inline (NOT as a React component to avoid remount issues)
+            const renderFilterRow = (f, isFirst, onJunctionChange, onRemove) => {
               const ops = OPS[f.colType] || OPS.str;
               const noVal = NO_VALUE_OPS.includes(f.op);
-              const junctionStyle = {
-                padding:'2px 7px', fontSize:'11px', fontWeight:600,
-                border:'1px solid var(--border)', borderRadius:4, cursor:'pointer',
-                background:'var(--card-bg)', color:'var(--text-secondary)',
-                display:'flex',alignItems:'center',gap:3,minWidth:52,
-              };
               return (
-                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:5,paddingLeft:indent?8:0}}>
-                  {/* Left label: "Where" on first, junction dropdown on rest */}
+                <div key={f.id} style={{display:'flex',alignItems:'center',gap:5,marginBottom:5,flexWrap:'nowrap'}}>
+                  {/* Left label */}
                   {isFirst
-                    ? <span style={{fontSize:'12px',color:'var(--text-tertiary)',fontWeight:500,minWidth:40,flexShrink:0}}>Where</span>
+                    ? <span style={{fontSize:'12px',color:'var(--text-tertiary)',fontWeight:500,width:42,flexShrink:0}}>Where</span>
                     : <div style={{position:'relative',flexShrink:0}}>
-                        <select
-                          value={f.junction}
-                          onChange={e=>onJunctionChange(e.target.value)}
-                          style={{...junctionStyle,appearance:'none',paddingRight:18,cursor:'pointer'}}>
+                        <select value={f.junction} onChange={e=>onJunctionChange(e.target.value)}
+                          style={{padding:'3px 18px 3px 7px',fontSize:'11px',fontWeight:600,border:'1px solid var(--border)',borderRadius:4,cursor:'pointer',background:'var(--card-bg)',color:'var(--text-secondary)',appearance:'none',width:52}}>
                           <option value="and">and</option>
                           <option value="or">or</option>
                         </select>
@@ -3686,8 +3696,8 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                       </div>
                   }
                   {/* Column */}
-                  <div style={{position:'relative',flexShrink:0,minWidth:90,maxWidth:120}}>
-                    <select className="form-input" style={{padding:'3px 20px 3px 7px',fontSize:'12px',width:'100%',appearance:'none',fontWeight:500}}
+                  <div style={{position:'relative',flexShrink:0,minWidth:80,flex:'0 0 25%'}}>
+                    <select className="form-input" style={{padding:'3px 18px 3px 7px',fontSize:'12px',width:'100%',appearance:'none',fontWeight:500}}
                       value={f.col}
                       onChange={e=>{
                         const cd=allCols.find(c=>c.name===e.target.value)||allCols[0];
@@ -3695,26 +3705,32 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                       }}>
                       {allCols.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
                     </select>
-                    <Icon name="chevronDown" size={10} style={{position:'absolute',right:5,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'var(--text-tertiary)'}}/>
+                    <Icon name="chevronDown" size={10} style={{position:'absolute',right:4,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'var(--text-tertiary)'}}/>
                   </div>
                   {/* Operator */}
-                  <div style={{position:'relative',flexShrink:0,minWidth:80,maxWidth:110}}>
-                    <select className="form-input" style={{padding:'3px 20px 3px 7px',fontSize:'12px',width:'100%',appearance:'none'}}
+                  <div style={{position:'relative',flexShrink:0,minWidth:70,flex:'0 0 22%'}}>
+                    <select className="form-input" style={{padding:'3px 18px 3px 7px',fontSize:'12px',width:'100%',appearance:'none'}}
                       value={f.op}
                       onChange={e=>updateFilter(f.id,{op:e.target.value,val:''})}>
                       {ops.map(o=><option key={o} value={o}>{o}</option>)}
                     </select>
-                    <Icon name="chevronDown" size={10} style={{position:'absolute',right:5,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'var(--text-tertiary)'}}/>
+                    <Icon name="chevronDown" size={10} style={{position:'absolute',right:4,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'var(--text-tertiary)'}}/>
                   </div>
-                  {/* Value */}
-                  {!noVal && <ValInput f={f}/>}
+                  {/* Value — flex:1 so it fills remaining space */}
+                  {!noVal && (
+                    f.colType==='date'
+                      ? <input type="date" className="form-input" style={{flex:1,minWidth:80,padding:'3px 7px',fontSize:'12px'}} value={f.val} onChange={e=>updateFilter(f.id,{val:e.target.value})}/>
+                      : f.colType==='num'
+                        ? <input type="number" className="form-input" style={{flex:1,minWidth:60,padding:'3px 7px',fontSize:'12px'}} value={f.val} onChange={e=>updateFilter(f.id,{val:e.target.value})} placeholder="number"/>
+                        : <input className="form-input" style={{flex:1,minWidth:60,padding:'3px 7px',fontSize:'12px'}} value={f.val} onChange={e=>updateFilter(f.id,{val:e.target.value})} placeholder="value"/>
+                  )}
                   {/* Delete */}
-                  <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:'3px 4px',flexShrink:0,display:'flex',alignItems:'center'}}
+                  <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:'3px 2px',flexShrink:0,display:'flex',alignItems:'center'}}
                     title="Remove" onClick={()=>onRemove(f.id)}>
                     <Icon name="trash" size={13}/>
                   </button>
                   {/* Drag handle */}
-                  <span style={{color:'var(--text-tertiary)',fontSize:'15px',cursor:'grab',flexShrink:0,lineHeight:1,userSelect:'none'}}>⠿</span>
+                  <span style={{color:'var(--text-tertiary)',fontSize:'14px',cursor:'grab',flexShrink:0,lineHeight:1,userSelect:'none'}}>⠿</span>
                 </div>
               );
             };
@@ -3730,83 +3746,64 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                     </div>
                   )}
 
-                  {/* ── Filter list ── */}
                   {filters.map((f, idx) => {
                     const isFirst = idx === 0;
+
                     if (f.type === 'filter') {
-                      return (
-                        <FilterRow key={f.id} f={f} isFirst={isFirst}
-                          onJunctionChange={j=>updateFilter(f.id,{junction:j})}
-                          onRemove={removeFilter}/>
-                      );
+                      return renderFilterRow(f, isFirst, j=>updateFilter(f.id,{junction:j}), removeFilter);
                     }
 
-                    // ── Conditional Group ──
                     if (f.type === 'group') {
-                      const innerLabel = f.innerJunction==='any' ? 'Any of the following are true…' : 'All of the following are true…';
                       return (
                         <div key={f.id} style={{marginBottom:6}}>
-                          {/* Group's own junction vs chain above */}
-                          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                          {/* Group's junction label on the left */}
+                          <div style={{display:'flex',alignItems:'flex-start',gap:5,marginBottom:4}}>
                             {isFirst
-                              ? <span style={{fontSize:'12px',color:'var(--text-tertiary)',fontWeight:500,minWidth:40,flexShrink:0}}>Where</span>
-                              : <div style={{position:'relative',flexShrink:0}}>
+                              ? <span style={{fontSize:'12px',color:'var(--text-tertiary)',fontWeight:500,width:42,flexShrink:0,paddingTop:6}}>Where</span>
+                              : <div style={{position:'relative',flexShrink:0,paddingTop:3}}>
                                   <select value={f.junction} onChange={e=>setFilters(prev=>prev.map(x=>x.id===f.id?{...x,junction:e.target.value}:x))}
-                                    style={{padding:'2px 18px 2px 7px',fontSize:'11px',fontWeight:600,border:'1px solid var(--border)',borderRadius:4,cursor:'pointer',background:'var(--card-bg)',color:'var(--text-secondary)',appearance:'none',minWidth:52}}>
+                                    style={{padding:'3px 18px 3px 7px',fontSize:'11px',fontWeight:600,border:'1px solid var(--border)',borderRadius:4,cursor:'pointer',background:'var(--card-bg)',color:'var(--text-secondary)',appearance:'none',width:52}}>
                                     <option value="and">and</option>
                                     <option value="or">or</option>
                                   </select>
                                   <Icon name="chevronDown" size={10} style={{position:'absolute',right:4,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'var(--text-tertiary)'}}/>
                                 </div>
                             }
-                            {/* Group box header */}
-                            <div style={{flex:1,display:'flex',alignItems:'center',gap:6,padding:'5px 10px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--input-bg)'}}>
-                              {/* Inner junction toggle */}
-                              <div style={{position:'relative',flexShrink:0}}>
-                                <select value={f.innerJunction} onChange={e=>setFilters(prev=>prev.map(x=>x.id===f.id?{...x,innerJunction:e.target.value}:x))}
-                                  style={{padding:'1px 16px 1px 5px',fontSize:'11px',fontWeight:500,border:'none',background:'transparent',cursor:'pointer',appearance:'none',color:'var(--text-secondary)'}}>
-                                  <option value="any">Any</option>
-                                  <option value="all">All</option>
-                                </select>
-                                <Icon name="chevronDown" size={9} style={{position:'absolute',right:2,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'var(--text-tertiary)'}}/>
+                            {/* Group block */}
+                            <div style={{flex:1,border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',background:'var(--input-bg)',overflow:'hidden'}}>
+                              {/* Group header row */}
+                              <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 8px',borderBottom: f.conditions.length > 0 ? '1px solid var(--border)' : 'none',background:'var(--card-bg)'}}>
+                                <span style={{fontSize:'11.5px',color:'var(--text-secondary)',flex:1,fontStyle:'italic'}}>Condition group</span>
+                                <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:'2px 3px',display:'flex',alignItems:'center'}} title="Add condition" onClick={()=>addConditionToGroup(f.id)}>
+                                  <Icon name="plus" size={13}/>
+                                </button>
+                                <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:'2px 3px',display:'flex',alignItems:'center'}} title="Remove group" onClick={()=>removeGroup(f.id)}>
+                                  <Icon name="trash" size={13}/>
+                                </button>
+                                <span style={{color:'var(--text-tertiary)',fontSize:'14px',cursor:'grab',lineHeight:1,userSelect:'none'}}>⠿</span>
                               </div>
-                              <span style={{fontSize:'12px',color:'var(--text-tertiary)',flex:1}}>of the following are true…</span>
-                              {/* + add condition */}
-                              <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:'2px 3px',display:'flex',alignItems:'center'}}
-                                title="Add condition to group" onClick={()=>addConditionToGroup(f.id)}>
-                                <Icon name="plus" size={13}/>
-                              </button>
-                              {/* delete group */}
-                              <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:'2px 3px',display:'flex',alignItems:'center'}}
-                                title="Remove group" onClick={()=>removeGroup(f.id)}>
-                                <Icon name="trash" size={13}/>
-                              </button>
-                              <span style={{color:'var(--text-tertiary)',fontSize:'14px',cursor:'grab',lineHeight:1,userSelect:'none'}}>⠿</span>
+                              {/* Conditions inside group */}
+                              {f.conditions.length === 0 && (
+                                <div style={{padding:'8px 10px',fontSize:'11.5px',color:'var(--text-tertiary)',fontStyle:'italic'}}>
+                                  Click <strong>+</strong> to add conditions inside this group
+                                </div>
+                              )}
+                              {f.conditions.length > 0 && (
+                                <div style={{padding:'8px 10px'}}>
+                                  {f.conditions.map((c,ci) =>
+                                    renderFilterRow(c, ci===0, j=>updateFilter(c.id,{junction:j}), removeFilter)
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
-
-                          {/* Group conditions — indented */}
-                          {f.conditions.length > 0 && (
-                            <div style={{marginLeft:52,borderLeft:'2px solid var(--border)',paddingLeft:10,paddingTop:4,paddingBottom:4}}>
-                              {f.conditions.map((c,ci)=>(
-                                <FilterRow key={c.id} f={c} isFirst={ci===0} indent={false}
-                                  onJunctionChange={j=>updateFilter(c.id,{junction:j})}
-                                  onRemove={removeFilter}/>
-                              ))}
-                            </div>
-                          )}
-                          {f.conditions.length===0 && (
-                            <div style={{marginLeft:52,paddingLeft:10,fontSize:'11.5px',color:'var(--text-tertiary)',fontStyle:'italic'}}>
-                              Click <Icon name="plus" size={11}/> to add conditions inside this group
-                            </div>
-                          )}
                         </div>
                       );
                     }
                     return null;
                   })}
 
-                  {/* ── Add Filter / Add Group buttons ── */}
+                  {/* Add buttons */}
                   <div style={{display:'flex',gap:6,marginTop:filters.length>0?10:0}}>
                     <button className="btn btn-ghost" style={{flex:1,justifyContent:'center',fontSize:'12px'}}
                       onClick={()=>setFilters(f=>[...f,makeFilter(allCols[0].name)])}>
@@ -3818,11 +3815,9 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                     </button>
                   </div>
 
-                  {/* ── Column field list ── */}
+                  {/* Column field list */}
                   <div className="divider"/>
-                  <div className="builder-section-title" style={{padding:'0 var(--space-sm)',marginBottom:4}}>
-                    Fields — click to filter
-                  </div>
+                  <div className="builder-section-title" style={{padding:'0 var(--space-sm)',marginBottom:4}}>Fields — click to filter</div>
                   {allCols.map(c => {
                     const count = filters.filter(f=>f.type==='filter'&&f.col===c.name).length
                       + filters.filter(f=>f.type==='group').reduce((a,g)=>a+g.conditions.filter(fc=>fc.col===c.name).length,0);
@@ -3875,7 +3870,8 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
             </div>
           </>}
         </div>
-
+        {/* Resize handle */}
+        <div ref={resizeRef} className="builder-resize-handle" onMouseDown={onResizeMouseDown}/>
         {/* Preview area */}
         <div className="builder-main">
           <div style={{padding:'var(--space-md)',borderBottom:'1px solid var(--border)',background:'var(--card-bg)',display:'flex',alignItems:'center',gap:'var(--space-sm)'}}>
