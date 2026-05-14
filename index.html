@@ -414,12 +414,8 @@
   }
   .dash-card:hover { transform: translateY(-2px); }
   .card-delete-btn {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 10;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     background: var(--card-bg);
@@ -428,10 +424,9 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
-  .dash-card:hover .card-delete-btn { opacity: 1; }
   .card-delete-btn:hover {
     background: #fef2f2;
     color: var(--danger);
@@ -1206,13 +1201,16 @@ const MiniChart = ({ color, type = 'line' }) => {
 const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard, userDashboards = [], onDeleteReport, onDeleteDashboard, onEditReport }) => {
   const [search, setSearch] = useState('');
   const [showNew, setShowNew] = useState(false);
-  const filtered = DASHBOARDS.filter(d =>
+  const [staticDashboards, setStaticDashboards] = useState(DASHBOARDS);
+  const filtered = staticDashboards.filter(d =>
     d.name.toLowerCase().includes(search.toLowerCase())
   );
   const filteredReports = savedReports.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase())
   );
   const miniTypes = ['area','bar','line','pie','area','bar'];
+
+  const deleteStaticDashboard = (id) => setStaticDashboards(prev => prev.filter(d => d.id !== id));
 
   return (
     <div className="screen" style={{display:'flex',flexDirection:'column',height:'100%'}}>
@@ -1245,9 +1243,6 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
             <div className="library-grid" style={{marginBottom:'var(--space-xl)'}}>
               {userDashboards.filter(d => d.name.toLowerCase().includes(search.toLowerCase())).map((d) => (
                 <div key={d.id} className="card dash-card" style={{position:'relative'}} onClick={() => navigate('dashboard', d)}>
-                  <button className="card-delete-btn" title="Delete dashboard" onClick={e => { e.stopPropagation(); onDeleteDashboard && onDeleteDashboard(d.id); }}>
-                    <Icon name="trash" size={13}/>
-                  </button>
                   <div className="dash-preview" style={{background:`linear-gradient(135deg, ${d.color}18 0%, ${d.color}08 100%)`,border:`1px solid ${d.color}25`,display:'flex',alignItems:'center',justifyContent:'center'}}>
                     <MiniChart color={d.color} type="area" />
                   </div>
@@ -1257,6 +1252,9 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
                     <div className="dash-card-footer">
                       {(d.tags || []).map(t => <span key={t} className="tag">{t}</span>)}
                       <span style={{marginLeft:'auto',fontSize:'11px',color:'var(--text-tertiary)',display:'flex',alignItems:'center',gap:4}}><Icon name="clock" size={11}/>just now</span>
+                      <button className="card-delete-btn" title="Delete dashboard" onClick={e => { e.stopPropagation(); onDeleteDashboard && onDeleteDashboard(d.id); }}>
+                        <Icon name="trash" size={13}/>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1275,9 +1273,6 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
         <div className="library-grid" style={{marginBottom:'var(--space-xl)'}}>
           {filtered.map((d, i) => (
             <div key={d.id} className="card dash-card" style={{position:'relative'}} onClick={() => navigate('dashboard', d)}>
-              <button className="card-delete-btn" title="Delete dashboard" onClick={e => { e.stopPropagation(); onDeleteDashboard && onDeleteDashboard(d.id); }}>
-                <Icon name="trash" size={13}/>
-              </button>
               <div className="dash-preview" style={{background: `linear-gradient(135deg, ${d.color}18 0%, ${d.color}08 100%)`, border:`1px solid ${d.color}25`}}>
                 <MiniChart color={d.color} type={miniTypes[i % miniTypes.length]} />
               </div>
@@ -1287,6 +1282,9 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
                 <div className="dash-card-footer">
                   {d.tags.map(t => <span key={t} className="tag">{t}</span>)}
                   <span style={{marginLeft:'auto',fontSize:'11px',color:'var(--text-tertiary)',display:'flex',alignItems:'center',gap:4}}><Icon name="clock" size={11}/>{d.updated}</span>
+                  <button className="card-delete-btn" title="Delete dashboard" onClick={e => { e.stopPropagation(); deleteStaticDashboard(d.id); }}>
+                    <Icon name="trash" size={13}/>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1314,9 +1312,6 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
           <div className="library-grid">
             {filteredReports.map((r, i) => (
               <div key={r.id} className="card dash-card" style={{position:'relative', cursor:'pointer'}} onClick={() => onEditReport && onEditReport(r)}>
-                <button className="card-delete-btn" title="Delete report" onClick={e => { e.stopPropagation(); onDeleteReport && onDeleteReport(r.id); }}>
-                  <Icon name="trash" size={13}/>
-                </button>
                 <div className="dash-preview" style={{background:`linear-gradient(135deg, ${r.color}18 0%, ${r.color}08 100%)`,border:`1px solid ${r.color}25`}}>
                   <MiniChart color={r.color} type={miniTypes[i % miniTypes.length]} />
                 </div>
@@ -1326,6 +1321,9 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
                   <div className="dash-card-footer">
                     {r.tags.map(t => <span key={t} className="tag">{t}</span>)}
                     <span style={{marginLeft:'auto',fontSize:'11px',color:'var(--text-tertiary)',display:'flex',alignItems:'center',gap:4}}><Icon name="clock" size={11}/>{r.savedAt}</span>
+                    <button className="card-delete-btn" title="Delete report" onClick={e => { e.stopPropagation(); onDeleteReport && onDeleteReport(r.id); }}>
+                      <Icon name="trash" size={13}/>
+                    </button>
                   </div>
                 </div>
                 <div style={{padding:'6px 12px 10px',borderTop:'1px solid var(--border)',display:'flex',alignItems:'center',gap:6,fontSize:'11px',color:'var(--accent)'}}>
@@ -4348,6 +4346,15 @@ const App = () => {
     setEditingReport(null);
   }, []);
 
+  const navigate = useCallback((target, data) => {
+    if (target === 'dashboard') { setActiveDashboard(data); setScreen('dashboard'); }
+    else if (target === 'library') setScreen('library');
+    else if (target === 'builder') setScreen('builder');
+    else if (target === 'datasources') setScreen('datasources');
+    else if (target === 'questions') { setEditingReport(null); setScreen('questions'); }
+    else setScreen(target);
+  }, []);
+
   const handleDeleteReport = useCallback((id) => {
     setSavedReports(prev => prev.filter(r => r.id !== id));
   }, []);
@@ -4365,15 +4372,6 @@ const App = () => {
     setUserDashboards(prev => [dashData, ...prev]);
     navigate('dashboard', dashData);
   }, [navigate]);
-
-  const navigate = useCallback((target, data) => {
-    if (target === 'dashboard') { setActiveDashboard(data); setScreen('dashboard'); }
-    else if (target === 'library') setScreen('library');
-    else if (target === 'builder') setScreen('builder');
-    else if (target === 'datasources') setScreen('datasources');
-    else if (target === 'questions') { setEditingReport(null); setScreen('questions'); }
-    else setScreen(target);
-  }, []);
 
   useEffect(() => {
     document.body.setAttribute('data-theme', tweaks.theme === 'default' ? '' : tweaks.theme);
