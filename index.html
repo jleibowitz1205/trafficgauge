@@ -942,7 +942,7 @@ const {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   PieChart, Pie, Cell, ResponsiveContainer,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ComposedChart,
+  ComposedChart, LabelList,
 } = window.Recharts;
 
 // ─── ICONS ──────────────────────────────────────────────────────────────────
@@ -2855,6 +2855,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
   const [selectedSeriesIdx, setSelectedSeriesIdx] = useState(0);
   const [yAxisFormat, setYAxisFormat] = useState('number');
   const [legendPos, setLegendPos] = useState('bottom');
+  const [showDataPoints, setShowDataPoints] = useState(false);
 
   // Helper: get color for a series index, falling back through defaults
   const DEFAULT_COLORS = ['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9'];
@@ -3002,26 +3003,42 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
     const axisStyle = {background:'var(--card-bg)',border:'1px solid var(--border)',borderRadius:'8px',fontSize:'12px'};
     if (chartType === 'bar') return (
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={previewData} margin={{top:8,right:16,left:0,bottom:0}}>
+        <BarChart data={previewData} margin={{top: showDataPoints ? 20 : 8,right:16,left:0,bottom:0}}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
           <XAxis dataKey="source" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
           <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
           <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Bar dataKey="value" fill={getSeriesColor(0)} radius={[4,4,0,0]} name={yMetrics[0]?.field || 'Value'}/>
-          {yMetrics.length > 1 && <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[4,4,0,0]} name={yMetrics[1]?.field || 'Value 2'}/>}
-          {yMetrics.length > 2 && <Bar dataKey="value3" fill={getSeriesColor(2)} radius={[4,4,0,0]} name={yMetrics[2]?.field || 'Value 3'}/>}
+          <Bar dataKey="value" fill={getSeriesColor(0)} radius={[4,4,0,0]} name={yMetrics[0]?.field || 'Value'}>
+            {showDataPoints && <LabelList dataKey="value" position="top" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+          </Bar>
+          {yMetrics.length > 1 && (
+            <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[4,4,0,0]} name={yMetrics[1]?.field || 'Value 2'}>
+              {showDataPoints && <LabelList dataKey="value2" position="top" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+            </Bar>
+          )}
+          {yMetrics.length > 2 && (
+            <Bar dataKey="value3" fill={getSeriesColor(2)} radius={[4,4,0,0]} name={yMetrics[2]?.field || 'Value 3'}>
+              {showDataPoints && <LabelList dataKey="value3" position="top" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+            </Bar>
+          )}
         </BarChart>
       </ResponsiveContainer>
     );
     if (chartType === 'row') return (
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={previewData} layout="vertical" margin={{top:8,right:16,left:8,bottom:0}}>
+        <BarChart data={previewData} layout="vertical" margin={{top:8,right: showDataPoints ? 48 : 16,left:8,bottom:0}}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false}/>
           <XAxis type="number" tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
           <YAxis type="category" dataKey="source" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} width={72}/>
           <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Bar dataKey="value" fill={getSeriesColor(0)} radius={[0,4,4,0]} name={yMetrics[0]?.field || 'Value'}/>
-          {yMetrics.length > 1 && <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[0,4,4,0]} name={yMetrics[1]?.field || 'Value 2'}/>}
+          <Bar dataKey="value" fill={getSeriesColor(0)} radius={[0,4,4,0]} name={yMetrics[0]?.field || 'Value'}>
+            {showDataPoints && <LabelList dataKey="value" position="right" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+          </Bar>
+          {yMetrics.length > 1 && (
+            <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[0,4,4,0]} name={yMetrics[1]?.field || 'Value 2'}>
+              {showDataPoints && <LabelList dataKey="value2" position="right" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+            </Bar>
+          )}
         </BarChart>
       </ResponsiveContainer>
     );
@@ -3037,9 +3054,9 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
             {yMetrics.length > 0
               ? yMetrics.map((m,i) => {
                   const dk = ['leads','sales','revenue'][i] || 'leads';
-                  return <Area key={i} type="monotone" dataKey={dk} stroke={getSeriesColor(i)} strokeWidth={2} fill="transparent" dot={false} name={m.field}/>;
+                  return <Area key={i} type="monotone" dataKey={dk} stroke={getSeriesColor(i)} strokeWidth={2} fill="transparent" dot={showDataPoints ? {r:4, fill:getSeriesColor(i), strokeWidth:0} : false} activeDot={{r:5}} name={m.field}/>;
                 })
-              : <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="transparent" dot={false} name="Series 1"/>
+              : <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="transparent" dot={showDataPoints ? {r:4, fill:getSeriesColor(0), strokeWidth:0} : false} activeDot={{r:5}} name="Series 1"/>
             }
           </AreaChart>
         </ResponsiveContainer>
@@ -3065,9 +3082,9 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
             {yMetrics.length > 0
               ? yMetrics.map((m,i) => {
                   const dk = ['leads','sales','revenue'][i] || 'leads';
-                  return <Area key={i} type="monotone" dataKey={dk} stroke={getSeriesColor(i)} strokeWidth={2} fill={`url(#rbAreaGrad${i})`} dot={false} name={m.field}/>;
+                  return <Area key={i} type="monotone" dataKey={dk} stroke={getSeriesColor(i)} strokeWidth={2} fill={`url(#rbAreaGrad${i})`} dot={showDataPoints ? {r:4, fill:getSeriesColor(i), strokeWidth:0} : false} activeDot={{r:5}} name={m.field}/>;
                 })
-              : <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="url(#rbAreaGrad0)" dot={false} name="Series 1"/>
+              : <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="url(#rbAreaGrad0)" dot={showDataPoints ? {r:4, fill:getSeriesColor(0), strokeWidth:0} : false} activeDot={{r:5}} name="Series 1"/>
             }
           </AreaChart>
         </ResponsiveContainer>
@@ -3098,9 +3115,9 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                 return <Bar key={key} dataKey={key} fill={color} radius={[3,3,0,0]} name={name}/>;
               }
               if (m.comboType === 'area') {
-                return <Area key={key} type="monotone" dataKey={key} stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} dot={false} name={name}/>;
+                return <Area key={key} type="monotone" dataKey={key} stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} dot={showDataPoints ? {r:4, fill:color, strokeWidth:0} : false} activeDot={{r:5}} name={name}/>;
               }
-              return <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} name={name}/>;
+              return <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={showDataPoints ? {r:4, fill:color, strokeWidth:0} : false} activeDot={{r:5}} name={name}/>;
             })}
           </ComposedChart>
         </ResponsiveContainer>
@@ -3130,12 +3147,13 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
             <PieChart>
               <Pie data={pieData} cx="50%" cy="50%" innerRadius="42%" outerRadius="72%" paddingAngle={2} dataKey="value"
                 onClick={(_, i) => { setSelectedSeriesIdx(i); }}
-                label={({cx,cy,midAngle,innerRadius,outerRadius,percent}) => {
+                label={showDataPoints ? ({cx,cy,midAngle,innerRadius,outerRadius,percent}) => {
                   if (percent < 0.04) return null;
                   const R = Math.PI/180, r = innerRadius+(outerRadius-innerRadius)*0.5;
                   const x = cx + r*Math.cos(-midAngle*R), y = cy + r*Math.sin(-midAngle*R);
                   return <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>{(percent*100).toFixed(1)}%</text>;
-                }} labelLine={false}>
+                } : false}
+                labelLine={false}>
                 {pieData.map((_,i) => <Cell key={i} fill={getSeriesColor(i)} stroke={selectedSeriesIdx===i ? '#fff' : 'none'} strokeWidth={selectedSeriesIdx===i ? 2 : 0}/>)}
               </Pie>
               <Tooltip contentStyle={{background:'var(--card-bg)',border:'1px solid var(--border)',borderRadius:'8px',fontSize:'12px'}}/>
@@ -4076,6 +4094,37 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                   ))}
                 </div>
               </div>
+
+              {/* ── Show Data Points (not for KPI or Table) ── */}
+              {!['number','table'].includes(chartType) && (
+                <div className="form-group">
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                    <div>
+                      <div className="form-label" style={{marginBottom:2}}>Show Data Points</div>
+                      <div style={{fontSize:'11px',color:'var(--text-tertiary)',lineHeight:1.4}}>
+                        {chartType==='pie' ? 'Show % label inside each slice'
+                          : chartType==='bar'||chartType==='row' ? 'Show value totals above each bar'
+                          : 'Plot data points along each series'}
+                      </div>
+                    </div>
+                    {/* Toggle switch */}
+                    <div onClick={()=>setShowDataPoints(v=>!v)}
+                      style={{
+                        width:40,height:22,borderRadius:11,cursor:'pointer',flexShrink:0,
+                        background: showDataPoints ? 'var(--accent)' : 'var(--border)',
+                        position:'relative',transition:'background 0.2s',
+                      }}>
+                      <div style={{
+                        position:'absolute',top:3,
+                        left: showDataPoints ? 21 : 3,
+                        width:16,height:16,borderRadius:'50%',
+                        background:'white',boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
+                        transition:'left 0.2s',
+                      }}/>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </>}
         </div>
