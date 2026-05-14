@@ -2821,6 +2821,12 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
   const [step, setStep] = useState(1);
   const [reportName, setReportName] = useState('New Report');
   const [editingName, setEditingName] = useState(false);
+  // activeTarget: 'x' | 'y' | null — which drop zone is "focused" for next field click
+  const [activeTarget, setActiveTarget] = useState('x');
+  // tableColumns: ordered list of column names selected for Table chart
+  const [tableColumns, setTableColumns] = useState([]);
+  // drag state for table column reordering
+  const [dragIdx, setDragIdx] = useState(null);
 
   const currentDB = DATABASES.find(d => d.id === selectedDB);
   const currentTable = currentDB?.tables.find(t => t.name === selectedTable);
@@ -3024,14 +3030,21 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
         </div>
       );
     }
-    if (chartType === 'table') return (
-      <div style={{overflowX:'auto',height:'100%',overflowY:'auto'}}>
-        <table className="data-table">
-          <thead><tr><th>Source</th><th>Est. Value</th></tr></thead>
-          <tbody>{previewData.map(r => <tr key={r.source}><td>{r.source}</td><td>${r.value.toLocaleString()}</td></tr>)}</tbody>
-        </table>
-      </div>
-    );
+    if (chartType === 'table') {
+      const cols = tableColumns.length > 0 ? tableColumns : ['Source','Est. Value'];
+      return (
+        <div style={{overflowX:'auto',height:'100%',overflowY:'auto'}}>
+          <table className="data-table">
+            <thead><tr>{cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
+            <tbody>
+              {previewData.map((r,ri) => (
+                <tr key={ri}>{cols.map(c => <td key={c}>{c==='Row Count'?ri+1:c==='Source'?r.source:r.value.toLocaleString()}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
     return (
       <div className="empty-state">
         <div className="empty-icon">📊</div>
@@ -3165,7 +3178,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
               <div style={{padding:'0 4px'}}>
                 <div className="chart-type-grid">
                   {chartTypes.map(ct => (
-                    <div key={ct.id} className={`chart-type-option${chartType===ct.id?' selected':''}`} onClick={() => { setChartType(ct.id); setYMetrics([]); setXAxis(''); }}>
+                    <div key={ct.id} className={`chart-type-option${chartType===ct.id?' selected':''}`} onClick={() => { setChartType(ct.id); setYMetrics([]); setXAxis(''); setActiveTarget('x'); setTableColumns([]); }}>
                       <Icon name={ct.icon} size={18}/>
                       {ct.label}
                     </div>
@@ -3178,11 +3191,33 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                 <div className="divider"/>
                 {/* X Axis */}
                 <div className="config-zone">
-                  <div className="config-zone-title">X Axis / Dimension</div>
-                  <div className={`drop-target${xAxis?' has-items':''}`} style={{cursor:'default'}}>
+                  <div className="config-zone-title"
+                    onClick={() => setActiveTarget('x')}
+                    style={{cursor:'pointer',display:'flex',alignItems:'center',gap:6,userSelect:'none'}}>
+                    <span style={{
+                      display:'inline-flex',alignItems:'center',justifyContent:'center',
+                      width:18,height:18,borderRadius:4,fontSize:'10px',fontWeight:700,
+                      background: activeTarget==='x' ? 'var(--accent)' : 'var(--badge-bg)',
+                      color: activeTarget==='x' ? 'white' : 'var(--text-tertiary)',
+                      transition:'background 0.15s, color 0.15s',flexShrink:0,
+                    }}>X</span>
+                    X Axis / Dimension
+                    {activeTarget==='x' && <span style={{marginLeft:'auto',fontSize:'10px',color:'var(--accent)',fontWeight:500}}>← active</span>}
+                  </div>
+                  <div
+                    className={`drop-target${xAxis?' has-items':''}`}
+                    onClick={() => setActiveTarget('x')}
+                    style={{
+                      cursor:'pointer',
+                      border: activeTarget==='x' ? '2px solid var(--accent)' : undefined,
+                      background: activeTarget==='x' && !xAxis ? 'var(--accent-light)' : undefined,
+                      transition:'border-color 0.15s, background 0.15s',
+                    }}>
                     {!xAxis
-                      ? <span className="drop-placeholder">Click a str or date column below…</span>
-                      : <span className="dropped-field" onClick={() => setXAxis('')}>{xAxis} ×</span>
+                      ? <span className="drop-placeholder" style={{color: activeTarget==='x' ? 'var(--accent)' : undefined}}>
+                          {activeTarget==='x' ? '← click any str or date field below' : 'Click here to activate, then pick a field'}
+                        </span>
+                      : <span className="dropped-field" onClick={e => { e.stopPropagation(); setXAxis(''); }}>{xAxis} ×</span>
                     }
                   </div>
                   {xAxis && xIsDate && (
@@ -3204,40 +3239,64 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
 
                 {/* Y Axis — numeric only */}
                 <div className="config-zone">
-                  <div className="config-zone-title">Y Axis / Metrics <span style={{fontWeight:400,color:'var(--text-tertiary)',fontSize:'10px'}}>(numeric)</span></div>
-                  {yMetrics.length === 0
-                    ? <div className="drop-target"><span className="drop-placeholder">Click a num column or Row Count…</span></div>
-                    : yMetrics.map((m, idx) => {
-                        const aggOpts = m.field === 'Row Count'
-                          ? Y_AGG_OPTIONS.filter(o => !o.requiresNum)
-                          : Y_AGG_OPTIONS; // all opts are valid for num cols
-                        return (
-                          <div key={idx} style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'8px 10px',marginBottom:6}}>
-                            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
-                              <span style={{fontSize:'12px',fontWeight:600,color:'var(--text-primary)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.field}</span>
-                              {chartType === 'combo' && (
-                                <div style={{display:'flex',gap:2}}>
-                                  {COMBO_SERIES_TYPES.map(st => (
-                                    <button key={st.id} onClick={() => updateYMetric(idx,{comboType:st.id})} title={st.label} className="btn" style={{
-                                      padding:'2px 6px', fontSize:'11px', height:'auto', gap:3,
-                                      background: m.comboType===st.id ? 'var(--accent-light)' : 'transparent',
-                                      color: m.comboType===st.id ? 'var(--accent)' : 'var(--text-tertiary)',
-                                      border: `1px solid ${m.comboType===st.id ? 'var(--accent)' : 'var(--border)'}`,
-                                    }}><Icon name={st.icon} size={11}/></button>
-                                  ))}
-                                </div>
-                              )}
-                              <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:2,lineHeight:1}} onClick={() => removeYMetric(idx)}>
-                                <Icon name="close" size={11}/>
-                              </button>
+                  <div className="config-zone-title"
+                    onClick={() => setActiveTarget('y')}
+                    style={{cursor:'pointer',display:'flex',alignItems:'center',gap:6,userSelect:'none'}}>
+                    <span style={{
+                      display:'inline-flex',alignItems:'center',justifyContent:'center',
+                      width:18,height:18,borderRadius:4,fontSize:'10px',fontWeight:700,
+                      background: activeTarget==='y' ? '#16a34a' : 'var(--badge-bg)',
+                      color: activeTarget==='y' ? 'white' : 'var(--text-tertiary)',
+                      transition:'background 0.15s, color 0.15s',flexShrink:0,
+                    }}>Y</span>
+                    Y Axis / Metrics
+                    <span style={{fontSize:'10px',color:'var(--text-tertiary)',fontWeight:400}}>(num)</span>
+                    {activeTarget==='y' && <span style={{marginLeft:'auto',fontSize:'10px',color:'#16a34a',fontWeight:500}}>← active</span>}
+                  </div>
+                  {yMetrics.length === 0 && (
+                    <div className="drop-target"
+                      onClick={() => setActiveTarget('y')}
+                      style={{
+                        cursor:'pointer',
+                        border: activeTarget==='y' ? '2px solid #16a34a' : undefined,
+                        background: activeTarget==='y' ? '#f0fdf4' : undefined,
+                        transition:'border-color 0.15s, background 0.15s',
+                      }}>
+                      <span className="drop-placeholder" style={{color: activeTarget==='y' ? '#16a34a' : undefined}}>
+                        {activeTarget==='y' ? '← click a num field or Row Count below' : 'Click here to activate, then pick a field'}
+                      </span>
+                    </div>
+                  )}
+                  {yMetrics.map((m, idx) => {
+                    const aggOpts = m.field === 'Row Count'
+                      ? Y_AGG_OPTIONS.filter(o => !o.requiresNum)
+                      : Y_AGG_OPTIONS;
+                    return (
+                      <div key={idx} style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'8px 10px',marginBottom:6}}>
+                        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+                          <span style={{fontSize:'12px',fontWeight:600,color:'var(--text-primary)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.field}</span>
+                          {chartType === 'combo' && (
+                            <div style={{display:'flex',gap:2}}>
+                              {COMBO_SERIES_TYPES.map(st => (
+                                <button key={st.id} onClick={() => updateYMetric(idx,{comboType:st.id})} title={st.label} className="btn" style={{
+                                  padding:'2px 6px', fontSize:'11px', height:'auto', gap:3,
+                                  background: m.comboType===st.id ? 'var(--accent-light)' : 'transparent',
+                                  color: m.comboType===st.id ? 'var(--accent)' : 'var(--text-tertiary)',
+                                  border: `1px solid ${m.comboType===st.id ? 'var(--accent)' : 'var(--border)'}`,
+                                }}><Icon name={st.icon} size={11}/></button>
+                              ))}
                             </div>
-                            <select className="form-input" style={{fontSize:'11.5px',padding:'3px 6px',width:'100%'}} value={m.agg} onChange={e => updateYMetric(idx,{agg:e.target.value})}>
-                              {aggOpts.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-                            </select>
-                          </div>
-                        );
-                      })
-                  }
+                          )}
+                          <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:2,lineHeight:1}} onClick={() => removeYMetric(idx)}>
+                            <Icon name="close" size={11}/>
+                          </button>
+                        </div>
+                        <select className="form-input" style={{fontSize:'11.5px',padding:'3px 6px',width:'100%'}} value={m.agg} onChange={e => updateYMetric(idx,{agg:e.target.value})}>
+                          {aggOpts.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                        </select>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Group By */}
@@ -3252,12 +3311,13 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                 <div className="divider"/>
                 <div className="builder-section-title" style={{padding:'0 var(--space-sm)'}}>Available Fields</div>
 
-                {/* Row Count — always first */}
+                {/* Row Count — always first, always Y */}
                 {(() => {
                   const inY = yMetrics.some(m => m.field === 'Row Count');
                   return (
                     <div className={`field-item${inY?' selected':''}`}
-                      onClick={() => { if (inY) removeYMetric(yMetrics.findIndex(m => m.field==='Row Count')); else addYMetric('Row Count'); }}>
+                      style={{borderLeft:`3px solid ${inY?'#16a34a':activeTarget==='y'?'#16a34a55':'transparent'}`,transition:'border-color 0.15s'}}
+                      onClick={() => { if (inY) removeYMetric(yMetrics.findIndex(m => m.field==='Row Count')); else { addYMetric('Row Count'); setActiveTarget('y'); } }}>
                       <span style={{fontSize:'12px',fontStyle:'italic',color:'var(--text-secondary)'}}>Row Count</span>
                       <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:'auto'}}>
                         {inY && <span style={{fontSize:'10px',color:'#16a34a',fontWeight:600,background:'#dcfce7',padding:'1px 5px',borderRadius:3}}>Y</span>}
@@ -3271,13 +3331,20 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                   const inX = xAxis === c.name;
                   const inY = yMetrics.some(m => m.field === c.name);
                   const isNumCol = c.type === 'num';
+                  const borderColor = inX ? 'var(--accent)' : inY ? '#16a34a'
+                    : activeTarget==='y' && isNumCol ? '#16a34a55'
+                    : activeTarget==='x' && !isNumCol ? 'var(--accent)55'
+                    : 'transparent';
                   return (
                     <div key={c.name} className={`field-item${(inX||inY)?' selected':''}`}
+                      style={{borderLeft:`3px solid ${borderColor}`,transition:'border-color 0.15s'}}
                       onClick={() => {
                         if (inX) { setXAxis(''); return; }
                         if (inY) { removeYMetric(yMetrics.findIndex(m => m.field===c.name)); return; }
-                        if (isNumCol) { addYMetric(c.name); }
-                        else { setXAxis(c.name); }
+                        if (activeTarget==='y' && isNumCol) { addYMetric(c.name); }
+                        else if (activeTarget==='x' && !isNumCol) { setXAxis(c.name); setActiveTarget('y'); }
+                        else if (isNumCol) { addYMetric(c.name); setActiveTarget('y'); }
+                        else { setXAxis(c.name); setActiveTarget('y'); }
                       }}>
                       <span style={{fontSize:'12.5px'}}>{c.name}</span>
                       <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:'auto'}}>
@@ -3293,29 +3360,42 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
               {/* ══ PIE CHART ══ */}
               {isPie && <>
                 <div className="divider"/>
-                {/* Measure = X (str/date cols) */}
+                {/* Measure */}
                 <div className="config-zone">
-                  <div className="config-zone-title">Measure</div>
-                  <div className={`drop-target${xAxis?' has-items':''}`} style={{cursor:'default'}}>
+                  <div className="config-zone-title"
+                    onClick={() => setActiveTarget('x')}
+                    style={{cursor:'pointer',display:'flex',alignItems:'center',gap:6,userSelect:'none'}}>
+                    <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:18,height:18,borderRadius:4,fontSize:'10px',fontWeight:700,background:activeTarget==='x'?'var(--accent)':'var(--badge-bg)',color:activeTarget==='x'?'white':'var(--text-tertiary)',transition:'all 0.15s',flexShrink:0}}>M</span>
+                    Measure
+                    {activeTarget==='x' && <span style={{marginLeft:'auto',fontSize:'10px',color:'var(--accent)',fontWeight:500}}>← active</span>}
+                  </div>
+                  <div className={`drop-target${xAxis?' has-items':''}`}
+                    onClick={() => setActiveTarget('x')}
+                    style={{cursor:'pointer',border:activeTarget==='x'?'2px solid var(--accent)':undefined,background:activeTarget==='x'&&!xAxis?'var(--accent-light)':undefined,transition:'all 0.15s'}}>
                     {!xAxis
-                      ? <span className="drop-placeholder">Click a column below…</span>
-                      : <span className="dropped-field" onClick={() => setXAxis('')}>{xAxis} ×</span>
+                      ? <span className="drop-placeholder" style={{color:activeTarget==='x'?'var(--accent)':undefined}}>{activeTarget==='x'?'← click any field below':'Click here to activate, then pick a field'}</span>
+                      : <span className="dropped-field" onClick={e=>{e.stopPropagation();setXAxis('')}}>{xAxis} ×</span>
                     }
                   </div>
                 </div>
-                {/* Summary = breakout dimension (str/date) */}
+                {/* Summary */}
                 <div className="config-zone">
-                  <div className="config-zone-title">Summary</div>
+                  <div className="config-zone-title"
+                    onClick={() => setActiveTarget('y')}
+                    style={{cursor:'pointer',display:'flex',alignItems:'center',gap:6,userSelect:'none'}}>
+                    <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:18,height:18,borderRadius:4,fontSize:'10px',fontWeight:700,background:activeTarget==='y'?'#16a34a':'var(--badge-bg)',color:activeTarget==='y'?'white':'var(--text-tertiary)',transition:'all 0.15s',flexShrink:0}}>S</span>
+                    Summary
+                    {activeTarget==='y' && <span style={{marginLeft:'auto',fontSize:'10px',color:'#16a34a',fontWeight:500}}>← active</span>}
+                  </div>
                   {yMetrics.length === 0
-                    ? <div className="drop-target"><span className="drop-placeholder">Click a column to break out…</span></div>
+                    ? <div className="drop-target" onClick={() => setActiveTarget('y')} style={{cursor:'pointer',border:activeTarget==='y'?'2px solid #16a34a':undefined,background:activeTarget==='y'?'#f0fdf4':undefined,transition:'all 0.15s'}}>
+                        <span className="drop-placeholder" style={{color:activeTarget==='y'?'#16a34a':undefined}}>{activeTarget==='y'?'← click any field below':'Click here to activate, then pick a field'}</span>
+                      </div>
                     : <>
-                        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8,padding:'6px 10px',background:'var(--accent-light)',border:'1px solid var(--accent)',borderRadius:'var(--radius-sm)'}}>
-                          <span style={{fontSize:'12px',fontWeight:600,color:'var(--accent)',flex:1}}>{yMetrics[0].field}</span>
-                          <button style={{background:'none',border:'none',color:'var(--accent)',cursor:'pointer',padding:2}} onClick={() => setYMetrics([])}>
-                            <Icon name="close" size={11}/>
-                          </button>
+                        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8,padding:'6px 10px',background:'#f0fdf4',border:'1px solid #16a34a',borderRadius:'var(--radius-sm)'}}>
+                          <span style={{fontSize:'12px',fontWeight:600,color:'#16a34a',flex:1}}>{yMetrics[0].field}</span>
+                          <button style={{background:'none',border:'none',color:'#16a34a',cursor:'pointer',padding:2}} onClick={() => setYMetrics([])}><Icon name="close" size={11}/></button>
                         </div>
-                        {/* Breakout value list */}
                         {getPieBreakoutValues().map((val, i) => (
                           <div key={val} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 10px',borderRadius:'var(--radius-sm)',marginBottom:3,border:'1px solid var(--border)',background:'var(--input-bg)'}}>
                             <span style={{width:8,height:8,borderRadius:'50%',background:PIE_SLICE_COLORS[i%5],flexShrink:0}}/>
@@ -3328,22 +3408,43 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                 </div>
                 <div className="divider"/>
                 <div className="builder-section-title" style={{padding:'0 var(--space-sm)'}}>Available Fields</div>
+                {/* Row Count for pie */}
+                {(() => {
+                  const inS = yMetrics[0]?.field === 'Row Count';
+                  return (
+                    <div className={`field-item${inS?' selected':''}`}
+                      style={{borderLeft:`3px solid ${inS?'#16a34a':activeTarget==='y'?'#16a34a55':'transparent'}`,transition:'border-color 0.15s'}}
+                      onClick={() => {
+                        if (inS) { setYMetrics([]); return; }
+                        if (activeTarget==='y' && yMetrics.length===0) setYMetrics([{field:'Row Count',agg:'count',comboType:'bar'}]);
+                      }}>
+                      <span style={{fontSize:'12px',fontStyle:'italic',color:'var(--text-secondary)'}}>Row Count</span>
+                      <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:'auto'}}>
+                        {inS && <span style={{fontSize:'10px',color:'#16a34a',fontWeight:600,background:'#dcfce7',padding:'1px 5px',borderRadius:3}}>S</span>}
+                        <span className="field-type num">num</span>
+                      </span>
+                    </div>
+                  );
+                })()}
                 {currentTable?.cols.map(c => {
                   const inX = xAxis === c.name;
-                  const inSum = yMetrics[0]?.field === c.name;
+                  const inS = yMetrics[0]?.field === c.name;
+                  const borderColor = inX?'var(--accent)':inS?'#16a34a':activeTarget==='x'?'var(--accent)55':activeTarget==='y'?'#16a34a55':'transparent';
                   return (
-                    <div key={c.name} className={`field-item${(inX||inSum)?' selected':''}`}
+                    <div key={c.name} className={`field-item${(inX||inS)?' selected':''}`}
+                      style={{borderLeft:`3px solid ${borderColor}`,transition:'border-color 0.15s'}}
                       onClick={() => {
                         if (inX) { setXAxis(''); return; }
-                        if (inSum) { setYMetrics([]); return; }
-                        // Pie: Measure = any col for X, Summary = any col for breakout
-                        if (!xAxis) setXAxis(c.name);
-                        else if (yMetrics.length === 0) setYMetrics([{field:c.name, agg:'count', comboType:'bar'}]);
+                        if (inS) { setYMetrics([]); return; }
+                        if (activeTarget==='x') { setXAxis(c.name); setActiveTarget('y'); }
+                        else if (activeTarget==='y' && yMetrics.length===0) { setYMetrics([{field:c.name,agg:'count',comboType:'bar'}]); }
+                        else if (!xAxis) { setXAxis(c.name); setActiveTarget('y'); }
+                        else if (yMetrics.length===0) { setYMetrics([{field:c.name,agg:'count',comboType:'bar'}]); }
                       }}>
                       <span style={{fontSize:'12.5px'}}>{c.name}</span>
                       <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:'auto'}}>
-                        {inX   && <span style={{fontSize:'10px',color:'var(--accent)',fontWeight:600,background:'var(--accent-light)',padding:'1px 5px',borderRadius:3}}>M</span>}
-                        {inSum && <span style={{fontSize:'10px',color:'#16a34a',fontWeight:600,background:'#dcfce7',padding:'1px 5px',borderRadius:3}}>S</span>}
+                        {inX && <span style={{fontSize:'10px',color:'var(--accent)',fontWeight:600,background:'var(--accent-light)',padding:'1px 5px',borderRadius:3}}>M</span>}
+                        {inS && <span style={{fontSize:'10px',color:'#16a34a',fontWeight:600,background:'#dcfce7',padding:'1px 5px',borderRadius:3}}>S</span>}
                         <span className={`field-type ${c.type}`}>{c.type}</span>
                       </span>
                     </div>
@@ -3355,15 +3456,18 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
               {isKPI && <>
                 <div className="divider"/>
                 <div className="config-zone">
-                  <div className="config-zone-title">Metric <span style={{fontWeight:400,color:'var(--text-tertiary)',fontSize:'10px'}}>(numeric only)</span></div>
+                  <div className="config-zone-title" style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:18,height:18,borderRadius:4,fontSize:'10px',fontWeight:700,background:'var(--accent)',color:'white',flexShrink:0}}>K</span>
+                    Metric <span style={{fontWeight:400,color:'var(--text-tertiary)',fontSize:'10px'}}>(numeric only)</span>
+                  </div>
                   {yMetrics.length === 0
-                    ? <div className="drop-target"><span className="drop-placeholder">Click a num column or Row Count…</span></div>
+                    ? <div className="drop-target" style={{border:'2px solid var(--accent)',background:'var(--accent-light)'}}>
+                        <span className="drop-placeholder" style={{color:'var(--accent)'}}>← click a num field or Row Count below</span>
+                      </div>
                     : <div style={{background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'8px 10px'}}>
                         <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
                           <span style={{fontSize:'12px',fontWeight:600,color:'var(--text-primary)',flex:1}}>{yMetrics[0].field}</span>
-                          <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:2}} onClick={() => setYMetrics([])}>
-                            <Icon name="close" size={11}/>
-                          </button>
+                          <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:2}} onClick={() => setYMetrics([])}><Icon name="close" size={11}/></button>
                         </div>
                         <select className="form-input" style={{fontSize:'11.5px',padding:'3px 6px',width:'100%'}} value={yMetrics[0].agg} onChange={e => updateYMetric(0,{agg:e.target.value})}>
                           {Y_AGG_OPTIONS.filter(o => !o.requiresNum || yMetrics[0].field !== 'Row Count').map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
@@ -3373,31 +3477,30 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                 </div>
                 <div className="divider"/>
                 <div className="builder-section-title" style={{padding:'0 var(--space-sm)'}}>Available Fields</div>
-                {/* Row Count always available */}
                 {(() => {
                   const sel = yMetrics[0]?.field === 'Row Count';
                   return (
                     <div className={`field-item${sel?' selected':''}`}
+                      style={{borderLeft:`3px solid ${sel?'var(--accent)':'var(--accent)55'}`,transition:'border-color 0.15s'}}
                       onClick={() => { if (sel) setYMetrics([]); else setYMetrics([{field:'Row Count',agg:'count',comboType:'bar'}]); }}>
                       <span style={{fontSize:'12px',fontStyle:'italic',color:'var(--text-secondary)'}}>Row Count</span>
                       <span className="field-type num">num</span>
                     </div>
                   );
                 })()}
-                {/* Only num cols */}
                 {currentTable?.cols.filter(c => c.type === 'num').map(c => {
                   const sel = yMetrics[0]?.field === c.name;
                   return (
                     <div key={c.name} className={`field-item${sel?' selected':''}`}
-                      onClick={() => { if (sel) setYMetrics([]); else setYMetrics([{field:c.name, agg:'sum', comboType:'bar'}]); }}>
+                      style={{borderLeft:`3px solid ${sel?'var(--accent)':'var(--accent)55'}`,transition:'border-color 0.15s'}}
+                      onClick={() => { if (sel) setYMetrics([]); else setYMetrics([{field:c.name,agg:'sum',comboType:'bar'}]); }}>
                       <span style={{fontSize:'12.5px'}}>{c.name}</span>
                       <span className={`field-type ${c.type}`}>{c.type}</span>
                     </div>
                   );
                 })}
-                {/* Show greyed-out non-numeric so user knows why they're not available */}
                 {currentTable?.cols.filter(c => c.type !== 'num').map(c => (
-                  <div key={c.name} className="field-item" style={{opacity:0.35, cursor:'not-allowed'}} title="Only numeric columns can be used as a KPI metric">
+                  <div key={c.name} className="field-item" style={{opacity:0.3,cursor:'not-allowed'}} title="Only numeric columns can be used as a KPI metric">
                     <span style={{fontSize:'12.5px'}}>{c.name}</span>
                     <span className={`field-type ${c.type}`}>{c.type}</span>
                   </div>
@@ -3407,7 +3510,64 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
               {/* ══ TABLE ══ */}
               {chartType === 'table' && <>
                 <div className="divider"/>
-                <div style={{padding:'var(--space-sm)',fontSize:'12px',color:'var(--text-secondary)'}}>All columns from the selected table will be shown. Use the Filters step to narrow results.</div>
+                <div className="config-zone">
+                  <div className="config-zone-title" style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:18,height:18,borderRadius:4,background:'var(--accent)',color:'white',flexShrink:0}}><Icon name="table" size={10}/></span>
+                    Columns <span style={{fontWeight:400,color:'var(--text-tertiary)',fontSize:'10px'}}>({tableColumns.length} selected)</span>
+                  </div>
+                  {tableColumns.length === 0
+                    ? <div className="drop-target" style={{border:'2px solid var(--accent)',background:'var(--accent-light)'}}>
+                        <span className="drop-placeholder" style={{color:'var(--accent)'}}>← click fields below to add columns</span>
+                      </div>
+                    : <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                        {tableColumns.map((col, idx) => (
+                          <div key={col}
+                            draggable
+                            onDragStart={() => setDragIdx(idx)}
+                            onDragOver={e => e.preventDefault()}
+                            onDrop={() => {
+                              if (dragIdx === null || dragIdx === idx) return;
+                              const next = [...tableColumns];
+                              const [moved] = next.splice(dragIdx, 1);
+                              next.splice(idx, 0, moved);
+                              setTableColumns(next);
+                              setDragIdx(null);
+                            }}
+                            onDragEnd={() => setDragIdx(null)}
+                            style={{display:'flex',alignItems:'center',gap:8,padding:'5px 8px',background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',cursor:'grab',opacity:dragIdx===idx?0.4:1,transition:'opacity 0.15s'}}>
+                            <span style={{color:'var(--text-tertiary)',fontSize:'14px',lineHeight:1,cursor:'grab'}}>⠿</span>
+                            <span style={{fontSize:'12px',color:'var(--text-primary)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{col}</span>
+                            <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:2,lineHeight:1}} onClick={() => setTableColumns(prev => prev.filter(c => c !== col))}><Icon name="close" size={10}/></button>
+                          </div>
+                        ))}
+                      </div>
+                  }
+                </div>
+                <div className="divider"/>
+                <div className="builder-section-title" style={{padding:'0 var(--space-sm)'}}>Available Fields</div>
+                {/* Row Count for table */}
+                {(() => {
+                  const sel = tableColumns.includes('Row Count');
+                  return (
+                    <div className={`field-item${sel?' selected':''}`}
+                      style={{borderLeft:`3px solid ${sel?'var(--accent)':'transparent'}`,transition:'border-color 0.15s'}}
+                      onClick={() => setTableColumns(prev => sel ? prev.filter(c=>c!=='Row Count') : [...prev,'Row Count'])}>
+                      <span style={{fontSize:'12px',fontStyle:'italic',color:'var(--text-secondary)'}}>Row Count</span>
+                      <span className="field-type num">num</span>
+                    </div>
+                  );
+                })()}
+                {currentTable?.cols.map(c => {
+                  const sel = tableColumns.includes(c.name);
+                  return (
+                    <div key={c.name} className={`field-item${sel?' selected':''}`}
+                      style={{borderLeft:`3px solid ${sel?'var(--accent)':'transparent'}`,transition:'border-color 0.15s'}}
+                      onClick={() => setTableColumns(prev => sel ? prev.filter(x=>x!==c.name) : [...prev, c.name])}>
+                      <span style={{fontSize:'12.5px'}}>{c.name}</span>
+                      <span className={`field-type ${c.type}`}>{c.type}</span>
+                    </div>
+                  );
+                })}
               </>}
 
             </div>
