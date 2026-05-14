@@ -2981,6 +2981,45 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport, editReport }) => 
     return vals;
   };
 
+  // Dynamic bar/row preview data — responds to xAxis field and xIsDate
+  const getBarData = () => {
+    // If X is a date field, use time-series data grouped by xDateGroup
+    if (xIsDate) {
+      return getTimeSeriesData().map(d => ({
+        xLabel: d.label,
+        value:  d.leads,
+        value2: Math.round(d.leads * 0.72 + 15),
+        value3: Math.round(d.leads * 0.54 + 30),
+      }));
+    }
+    // If X is a string field, generate labelled categorical data named after the selected column
+    // Use up to 5 representative labels drawn from the column's known values if available,
+    // otherwise fall back to generic category names.
+    const col = currentTable?.cols.find(c => c.name === xAxis);
+    const colName = xAxis || 'Category';
+    // Try to pull distinct values from the DB's sample rows
+    let labels = [];
+    if (col && currentTable) {
+      const colIdx = currentTable.cols.indexOf(col);
+      const seen = new Set();
+      for (const row of (currentDB?.rows || [])) {
+        const v = String(row?.[colIdx] ?? '');
+        if (v && !seen.has(v)) { seen.add(v); labels.push(v); }
+        if (labels.length >= 5) break;
+      }
+    }
+    if (labels.length < 3) {
+      labels = [`${colName} A`, `${colName} B`, `${colName} C`, `${colName} D`, `${colName} E`];
+    }
+    const base = [124, 98, 87, 62, 53];
+    return labels.slice(0, 5).map((lbl, i) => ({
+      xLabel: lbl,
+      value:  base[i] * 1000,
+      value2: Math.round(base[i] * 0.72) * 1000,
+      value3: Math.round(base[i] * 0.54) * 1000,
+    }));
+  };
+
   const previewData = [
     {source:'Organic',   value:124000, value2:88000},
     {source:'Paid Search',value:98000, value2:61000},
@@ -3035,47 +3074,54 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport, editReport }) => 
 
   const renderPreview = () => {
     const axisStyle = {background:'var(--card-bg)',border:'1px solid var(--border)',borderRadius:'8px',fontSize:'12px'};
-    if (chartType === 'bar') return (
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={previewData} margin={{top: showDataPoints ? 20 : 8,right:16,left:0,bottom:0}}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
-          <XAxis dataKey="source" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
-          <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
-          <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Bar dataKey="value" fill={getSeriesColor(0)} radius={[4,4,0,0]} name={yMetrics[0]?.field || 'Value'}>
-            {showDataPoints && <LabelList dataKey="value" position="top" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
-          </Bar>
-          {yMetrics.length > 1 && (
-            <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[4,4,0,0]} name={yMetrics[1]?.field || 'Value 2'}>
-              {showDataPoints && <LabelList dataKey="value2" position="top" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+    if (chartType === 'bar') {
+      const barData = getBarData();
+      const xLabel = xAxis || 'Category';
+      return (
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={barData} margin={{top: showDataPoints ? 20 : 8,right:16,left:0,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+            <XAxis dataKey="xLabel" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} label={xAxis ? undefined : undefined}/>
+            <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
+            <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
+            <Bar dataKey="value" fill={getSeriesColor(0)} radius={[4,4,0,0]} name={yMetrics[0]?.field || xLabel}>
+              {showDataPoints && <LabelList dataKey="value" position="top" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
             </Bar>
-          )}
-          {yMetrics.length > 2 && (
-            <Bar dataKey="value3" fill={getSeriesColor(2)} radius={[4,4,0,0]} name={yMetrics[2]?.field || 'Value 3'}>
-              {showDataPoints && <LabelList dataKey="value3" position="top" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+            {yMetrics.length > 1 && (
+              <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[4,4,0,0]} name={yMetrics[1]?.field || 'Series 2'}>
+                {showDataPoints && <LabelList dataKey="value2" position="top" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+              </Bar>
+            )}
+            {yMetrics.length > 2 && (
+              <Bar dataKey="value3" fill={getSeriesColor(2)} radius={[4,4,0,0]} name={yMetrics[2]?.field || 'Series 3'}>
+                {showDataPoints && <LabelList dataKey="value3" position="top" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+              </Bar>
+            )}
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    }
+    if (chartType === 'row') {
+      const barData = getBarData();
+      return (
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={barData} layout="vertical" margin={{top:8,right: showDataPoints ? 52 : 16,left:8,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false}/>
+            <XAxis type="number" tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
+            <YAxis type="category" dataKey="xLabel" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} width={80}/>
+            <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
+            <Bar dataKey="value" fill={getSeriesColor(0)} radius={[0,4,4,0]} name={yMetrics[0]?.field || 'Value'}>
+              {showDataPoints && <LabelList dataKey="value" position="right" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
             </Bar>
-          )}
-        </BarChart>
-      </ResponsiveContainer>
-    );
-    if (chartType === 'row') return (
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={previewData} layout="vertical" margin={{top:8,right: showDataPoints ? 48 : 16,left:8,bottom:0}}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false}/>
-          <XAxis type="number" tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
-          <YAxis type="category" dataKey="source" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} width={72}/>
-          <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Bar dataKey="value" fill={getSeriesColor(0)} radius={[0,4,4,0]} name={yMetrics[0]?.field || 'Value'}>
-            {showDataPoints && <LabelList dataKey="value" position="right" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
-          </Bar>
-          {yMetrics.length > 1 && (
-            <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[0,4,4,0]} name={yMetrics[1]?.field || 'Value 2'}>
-              {showDataPoints && <LabelList dataKey="value2" position="right" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
-            </Bar>
-          )}
-        </BarChart>
-      </ResponsiveContainer>
-    );
+            {yMetrics.length > 1 && (
+              <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[0,4,4,0]} name={yMetrics[1]?.field || 'Series 2'}>
+                {showDataPoints && <LabelList dataKey="value2" position="right" formatter={formatYValue} style={{fontSize:'10px',fill:'var(--text-secondary)',fontWeight:600}}/>}
+              </Bar>
+            )}
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    }
     if (chartType === 'line') {
       const tsData = getTimeSeriesData();
       return (
