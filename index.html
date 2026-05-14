@@ -941,7 +941,8 @@ const { useState, useEffect, useRef, useCallback } = React;
 const {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   PieChart, Pie, Cell, ResponsiveContainer,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ComposedChart,
 } = window.Recharts;
 
 // ─── ICONS ──────────────────────────────────────────────────────────────────
@@ -2960,6 +2961,43 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
     return `${v}`;
   };
 
+  // Generate sample time-series data that matches the selected xDateGroup
+  const getTimeSeriesData = () => {
+    switch (xDateGroup) {
+      case 'Day':
+        return Array.from({length:14}, (_,i) => ({
+          label: `May ${i+1}`,
+          leads: 18+Math.round(Math.sin(i*0.7)*8+Math.random()*6),
+          sales: 3+Math.round(Math.sin(i*0.5)*2+Math.random()*2),
+          revenue: 82000+Math.round(Math.sin(i*0.6)*20000+Math.random()*15000),
+        }));
+      case 'Week':
+        return Array.from({length:12}, (_,i) => ({
+          label: `Wk ${i+1}`,
+          leads: 60+Math.round(Math.sin(i*0.6)*25+Math.random()*20),
+          sales: 12+Math.round(Math.sin(i*0.5)*5+Math.random()*5),
+          revenue: 290000+Math.round(Math.sin(i*0.55)*80000+Math.random()*60000),
+        }));
+      case 'Quarter':
+        return [
+          {label:'Q1',leads:616,sales:127,revenue:3152000},
+          {label:'Q2',leads:773,sales:174,revenue:4338000},
+          {label:'Q3',leads:920,sales:211,revenue:5256000},
+          {label:'Q4',leads:1094,sales:255,revenue:6357000},
+        ];
+      case 'Year':
+        return Array.from({length:5}, (_,i) => ({
+          label: `${2020+i}`,
+          leads: 1800+i*420+Math.round(Math.random()*200),
+          sales: 340+i*82+Math.round(Math.random()*40),
+          revenue: 8400000+i*2100000+Math.round(Math.random()*400000),
+        }));
+      case 'Month':
+      default:
+        return monthlyLeads.map(d => ({label:d.month, leads:d.leads, sales:d.sales, revenue:d.revenue}));
+    }
+  };
+
   const renderPreview = () => {
     const axisStyle = {background:'var(--card-bg)',border:'1px solid var(--border)',borderRadius:'8px',fontSize:'12px'};
     if (chartType === 'bar') return (
@@ -2987,56 +3025,84 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
         </BarChart>
       </ResponsiveContainer>
     );
-    if (chartType === 'line') return (
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={monthlyLeads} margin={{top:8,right:16,left:-10,bottom:0}}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
-          <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
-          <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
-          <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="transparent" dot={false} name={yMetrics[0]?.field || 'Series 1'}/>
-          {yMetrics.length > 1 && <Area type="monotone" dataKey="sales" stroke={getSeriesColor(1)} strokeWidth={2} fill="transparent" dot={false} name={yMetrics[1]?.field || 'Series 2'}/>}
-        </AreaChart>
-      </ResponsiveContainer>
-    );
-    if (chartType === 'area') return (
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={monthlyLeads} margin={{top:8,right:16,left:-10,bottom:0}}>
-          <defs>
-            {[0,1,2].map(i => (
-              <linearGradient key={i} id={`rbAreaGrad${i}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={getSeriesColor(i)} stopOpacity={0.25}/>
-                <stop offset="95%" stopColor={getSeriesColor(i)} stopOpacity={0}/>
-              </linearGradient>
-            ))}
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
-          <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
-          <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
-          <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="url(#rbAreaGrad0)" dot={false} name={yMetrics[0]?.field || 'Series 1'}/>
-          {yMetrics.length > 1 && <Area type="monotone" dataKey="sales" stroke={getSeriesColor(1)} strokeWidth={2} fill="url(#rbAreaGrad1)" dot={false} name={yMetrics[1]?.field || 'Series 2'}/>}
-        </AreaChart>
-      </ResponsiveContainer>
-    );
-    if (chartType === 'combo') {
-      const barSeries  = yMetrics.filter(m => m.comboType === 'bar');
-      const lineSeries = yMetrics.filter(m => m.comboType === 'line' || m.comboType === 'area');
+    if (chartType === 'line') {
+      const tsData = getTimeSeriesData();
       return (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={monthlyLeads} margin={{top:8,right:16,left:-10,bottom:0}}>
+          <AreaChart data={tsData} margin={{top:8,right:16,left:-10,bottom:0}}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
-            <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
+            <XAxis dataKey="label" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
             <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
             <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-            <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize:'11px'}}/>
-            {barSeries.map((m,i) => (
-              <Bar key={m.field+i} dataKey={['leads','sales','revenue'][i]||'leads'} fill={getSeriesColor(yMetrics.indexOf(m))} radius={[4,4,0,0]} name={m.field}/>
-            ))}
-            {lineSeries.map((m,i) => (
-              <Line key={m.field+i} type="monotone" dataKey={['revenue','leads','sales'][i]||'leads'} stroke={getSeriesColor(yMetrics.indexOf(m))} strokeWidth={2} dot={false} name={m.field}/>
-            ))}
-          </BarChart>
+            {yMetrics.length > 0
+              ? yMetrics.map((m,i) => {
+                  const dk = ['leads','sales','revenue'][i] || 'leads';
+                  return <Area key={i} type="monotone" dataKey={dk} stroke={getSeriesColor(i)} strokeWidth={2} fill="transparent" dot={false} name={m.field}/>;
+                })
+              : <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="transparent" dot={false} name="Series 1"/>
+            }
+          </AreaChart>
+        </ResponsiveContainer>
+      );
+    }
+    if (chartType === 'area') {
+      const tsData = getTimeSeriesData();
+      return (
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={tsData} margin={{top:8,right:16,left:-10,bottom:0}}>
+            <defs>
+              {[0,1,2].map(i => (
+                <linearGradient key={i} id={`rbAreaGrad${i}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={getSeriesColor(i)} stopOpacity={0.25}/>
+                  <stop offset="95%" stopColor={getSeriesColor(i)} stopOpacity={0}/>
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+            <XAxis dataKey="label" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
+            <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
+            <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
+            {yMetrics.length > 0
+              ? yMetrics.map((m,i) => {
+                  const dk = ['leads','sales','revenue'][i] || 'leads';
+                  return <Area key={i} type="monotone" dataKey={dk} stroke={getSeriesColor(i)} strokeWidth={2} fill={`url(#rbAreaGrad${i})`} dot={false} name={m.field}/>;
+                })
+              : <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="url(#rbAreaGrad0)" dot={false} name="Series 1"/>
+            }
+          </AreaChart>
+        </ResponsiveContainer>
+      );
+    }
+    if (chartType === 'combo') {
+      const tsData = getTimeSeriesData();
+      const comboData = tsData.map(d => {
+        const row = {label: d.label};
+        yMetrics.forEach((m, i) => {
+          row[`series_${i}`] = [d.leads, d.sales, d.revenue/10000][i % 3] ?? d.leads;
+        });
+        return row;
+      });
+      return (
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={comboData} margin={{top:8,right:16,left:-10,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+            <XAxis dataKey="label" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
+            <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
+            <Tooltip contentStyle={axisStyle} formatter={(v,name) => [formatYValue(v), name]}/>
+            <Legend iconSize={8} wrapperStyle={{fontSize:'11px'}}/>
+            {yMetrics.map((m, i) => {
+              const key = `series_${i}`;
+              const color = getSeriesColor(i);
+              const name = m.field || `Series ${i+1}`;
+              if (m.comboType === 'bar') {
+                return <Bar key={key} dataKey={key} fill={color} radius={[3,3,0,0]} name={name}/>;
+              }
+              if (m.comboType === 'area') {
+                return <Area key={key} type="monotone" dataKey={key} stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} dot={false} name={name}/>;
+              }
+              return <Line key={key} type="monotone" dataKey={key} stroke={color} strokeWidth={2} dot={false} name={name}/>;
+            })}
+          </ComposedChart>
         </ResponsiveContainer>
       );
     }
