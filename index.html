@@ -413,6 +413,30 @@
     cursor: pointer;
   }
   .dash-card:hover { transform: translateY(-2px); }
+  .card-delete-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .dash-card:hover .card-delete-btn { opacity: 1; }
+  .card-delete-btn:hover {
+    background: #fef2f2;
+    color: var(--danger);
+    border-color: #fecaca;
+  }
   .dash-preview {
     height: 120px;
     border-radius: var(--radius-md);
@@ -1179,7 +1203,7 @@ const MiniChart = ({ color, type = 'line' }) => {
 };
 
 // ─── SCREEN: LIBRARY ─────────────────────────────────────────────────────────
-const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard, userDashboards = [] }) => {
+const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard, userDashboards = [], onDeleteReport, onDeleteDashboard, onEditReport }) => {
   const [search, setSearch] = useState('');
   const [showNew, setShowNew] = useState(false);
   const filtered = DASHBOARDS.filter(d =>
@@ -1220,7 +1244,10 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
             </div>
             <div className="library-grid" style={{marginBottom:'var(--space-xl)'}}>
               {userDashboards.filter(d => d.name.toLowerCase().includes(search.toLowerCase())).map((d) => (
-                <div key={d.id} className="card dash-card" onClick={() => navigate('dashboard', d)}>
+                <div key={d.id} className="card dash-card" style={{position:'relative'}} onClick={() => navigate('dashboard', d)}>
+                  <button className="card-delete-btn" title="Delete dashboard" onClick={e => { e.stopPropagation(); onDeleteDashboard && onDeleteDashboard(d.id); }}>
+                    <Icon name="trash" size={13}/>
+                  </button>
                   <div className="dash-preview" style={{background:`linear-gradient(135deg, ${d.color}18 0%, ${d.color}08 100%)`,border:`1px solid ${d.color}25`,display:'flex',alignItems:'center',justifyContent:'center'}}>
                     <MiniChart color={d.color} type="area" />
                   </div>
@@ -1247,7 +1274,10 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
         </div>
         <div className="library-grid" style={{marginBottom:'var(--space-xl)'}}>
           {filtered.map((d, i) => (
-            <div key={d.id} className="card dash-card" onClick={() => navigate('dashboard', d)}>
+            <div key={d.id} className="card dash-card" style={{position:'relative'}} onClick={() => navigate('dashboard', d)}>
+              <button className="card-delete-btn" title="Delete dashboard" onClick={e => { e.stopPropagation(); onDeleteDashboard && onDeleteDashboard(d.id); }}>
+                <Icon name="trash" size={13}/>
+              </button>
               <div className="dash-preview" style={{background: `linear-gradient(135deg, ${d.color}18 0%, ${d.color}08 100%)`, border:`1px solid ${d.color}25`}}>
                 <MiniChart color={d.color} type={miniTypes[i % miniTypes.length]} />
               </div>
@@ -1283,7 +1313,10 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
         ) : (
           <div className="library-grid">
             {filteredReports.map((r, i) => (
-              <div key={r.id} className="card dash-card">
+              <div key={r.id} className="card dash-card" style={{position:'relative', cursor:'pointer'}} onClick={() => onEditReport && onEditReport(r)}>
+                <button className="card-delete-btn" title="Delete report" onClick={e => { e.stopPropagation(); onDeleteReport && onDeleteReport(r.id); }}>
+                  <Icon name="trash" size={13}/>
+                </button>
                 <div className="dash-preview" style={{background:`linear-gradient(135deg, ${r.color}18 0%, ${r.color}08 100%)`,border:`1px solid ${r.color}25`}}>
                   <MiniChart color={r.color} type={miniTypes[i % miniTypes.length]} />
                 </div>
@@ -1294,6 +1327,9 @@ const LibraryScreen = ({ navigate, tweaks, savedReports = [], onCreateDashboard,
                     {r.tags.map(t => <span key={t} className="tag">{t}</span>)}
                     <span style={{marginLeft:'auto',fontSize:'11px',color:'var(--text-tertiary)',display:'flex',alignItems:'center',gap:4}}><Icon name="clock" size={11}/>{r.savedAt}</span>
                   </div>
+                </div>
+                <div style={{padding:'6px 12px 10px',borderTop:'1px solid var(--border)',display:'flex',alignItems:'center',gap:6,fontSize:'11px',color:'var(--accent)'}}>
+                  <Icon name="edit" size={11}/>Edit in Report Builder
                 </div>
               </div>
             ))}
@@ -2823,25 +2859,25 @@ const COMBO_SERIES_TYPES = [
   {id:'area', label:'Area', icon:'area'},
 ];
 
-const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
-  const [selectedDB, setSelectedDB] = useState('calendar_events');
-  const [selectedTable, setSelectedTable] = useState('calendar_events');
-  const [chartType, setChartType] = useState('bar');
+const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport, editReport }) => {
+  const [selectedDB, setSelectedDB] = useState(editReport?.db || 'calendar_events');
+  const [selectedTable, setSelectedTable] = useState(editReport?.table || 'calendar_events');
+  const [chartType, setChartType] = useState(editReport?.chartType || 'bar');
   // xAxis: single field name (string) or ''
-  const [xAxis, setXAxis] = useState('Make');
+  const [xAxis, setXAxis] = useState(editReport?.xAxis || 'Make');
   // xDateGroup: 'Day'|'Week'|'Month'|'Quarter'|'Year'
-  const [xDateGroup, setXDateGroup] = useState('Month');
+  const [xDateGroup, setXDateGroup] = useState(editReport?.xDateGroup || 'Month');
   // yMetrics: array of {field, agg, comboType} objects
-  const [yMetrics, setYMetrics] = useState([{field:'Year', agg:'count', comboType:'bar'}]);
-  const [groupBy, setGroupBy] = useState([]);
-  const [filters, setFilters] = useState([]);
+  const [yMetrics, setYMetrics] = useState(editReport?.yMetrics || [{field:'Year', agg:'count', comboType:'bar'}]);
+  const [groupBy, setGroupBy] = useState(editReport?.groupBy || []);
+  const [filters, setFilters] = useState(editReport?.filters || []);
   const [step, setStep] = useState(1);
-  const [reportName, setReportName] = useState('New Report');
+  const [reportName, setReportName] = useState(editReport?.name || 'New Report');
   const [editingName, setEditingName] = useState(false);
   // activeTarget: 'x' | 'y' | null — which drop zone is "focused" for next field click
   const [activeTarget, setActiveTarget] = useState('x');
   // tableColumns: ordered list of column names selected for Table chart
-  const [tableColumns, setTableColumns] = useState([]);
+  const [tableColumns, setTableColumns] = useState(editReport?.tableColumns || []);
   // drag state for table column reordering
   const [dragIdx, setDragIdx] = useState(null);
   // resizable panel
@@ -2849,13 +2885,13 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
   const resizeRef = React.useRef(null);
 
   // display settings (step 4)
-  const [subtitle, setSubtitle] = useState('');
+  const [subtitle, setSubtitle] = useState(editReport?.subtitle || '');
   // seriesColors[i] = hex color for series/slice i
-  const [seriesColors, setSeriesColors] = useState(['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6']);
+  const [seriesColors, setSeriesColors] = useState(editReport?.seriesColors || ['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6']);
   const [selectedSeriesIdx, setSelectedSeriesIdx] = useState(0);
-  const [yAxisFormat, setYAxisFormat] = useState('number');
-  const [legendPos, setLegendPos] = useState('bottom');
-  const [showDataPoints, setShowDataPoints] = useState(false);
+  const [yAxisFormat, setYAxisFormat] = useState(editReport?.yAxisFormat || 'number');
+  const [legendPos, setLegendPos] = useState(editReport?.legendPos || 'bottom');
+  const [showDataPoints, setShowDataPoints] = useState(editReport?.showDataPoints || false);
 
   // Helper: get color for a series index, falling back through defaults
   const DEFAULT_COLORS = ['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9'];
@@ -3250,6 +3286,9 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
       <div className="topbar">
         {/* Editable report name */}
         <div style={{display:'flex',alignItems:'center',gap:8,flex:1}}>
+          {editReport && (
+            <span style={{fontSize:'11px',fontWeight:600,padding:'2px 8px',borderRadius:20,background:'var(--accent-light)',color:'var(--accent)',letterSpacing:'0.03em',flexShrink:0}}>EDITING</span>
+          )}
           {editingName ? (
             <input
               className="form-input"
@@ -3298,7 +3337,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
         <div className="topbar-actions">
           <button className="btn btn-ghost" onClick={() => {
             onSaveReport && onSaveReport({
-              id: Date.now(),
+              id: editReport?.id || Date.now(),
               name: reportName,
               desc: `${currentDB?.name} · ${selectedTable}`,
               tags: [currentDB?.name].filter(Boolean),
@@ -3306,11 +3345,22 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
               chartType,
               db: selectedDB,
               table: selectedTable,
+              xAxis,
+              xDateGroup,
+              yMetrics,
+              groupBy,
+              filters,
+              tableColumns,
+              subtitle,
+              seriesColors,
+              yAxisFormat,
+              legendPos,
+              showDataPoints,
               savedAt: new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),
             });
             navigate('library');
           }}>
-            <Icon name="share" size={13}/>Save Report
+            <Icon name="share" size={13}/>{editReport ? 'Update Report' : 'Save Report'}
           </button>
           <button className="btn btn-primary" onClick={() => navigate('dashboard')}>
             <Icon name="download" size={13}/>Export
@@ -4286,10 +4336,29 @@ const App = () => {
   const [activeDashboard, setActiveDashboard] = useState(null);
   const [savedReports, setSavedReports] = useState([]);
   const [userDashboards, setUserDashboards] = useState([]);
+  const [editingReport, setEditingReport] = useState(null);
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
   const handleSaveReport = useCallback((report) => {
-    setSavedReports(prev => [report, ...prev]);
+    setSavedReports(prev => {
+      const exists = prev.find(r => r.id === report.id);
+      if (exists) return prev.map(r => r.id === report.id ? report : r);
+      return [report, ...prev];
+    });
+    setEditingReport(null);
+  }, []);
+
+  const handleDeleteReport = useCallback((id) => {
+    setSavedReports(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const handleDeleteDashboard = useCallback((id) => {
+    setUserDashboards(prev => prev.filter(d => d.id !== id));
+  }, []);
+
+  const handleEditReport = useCallback((report) => {
+    setEditingReport(report);
+    setScreen('questions');
   }, []);
 
   const handleCreateDashboard = useCallback((dashData) => {
@@ -4302,6 +4371,7 @@ const App = () => {
     else if (target === 'library') setScreen('library');
     else if (target === 'builder') setScreen('builder');
     else if (target === 'datasources') setScreen('datasources');
+    else if (target === 'questions') { setEditingReport(null); setScreen('questions'); }
     else setScreen(target);
   }, []);
 
@@ -4312,10 +4382,10 @@ const App = () => {
 
   const renderScreen = () => {
     switch (screen) {
-      case 'library': return <LibraryScreen navigate={navigate} tweaks={tweaks} savedReports={savedReports} userDashboards={userDashboards} onCreateDashboard={handleCreateDashboard}/>;
+      case 'library': return <LibraryScreen navigate={navigate} tweaks={tweaks} savedReports={savedReports} userDashboards={userDashboards} onCreateDashboard={handleCreateDashboard} onDeleteReport={handleDeleteReport} onDeleteDashboard={handleDeleteDashboard} onEditReport={handleEditReport}/>;
       case 'dashboard': return <DashboardScreen navigate={navigate} dashboard={activeDashboard} tweaks={tweaks} savedReports={savedReports}/>;
       case 'builder': return <BuilderScreen navigate={navigate} tweaks={tweaks}/>;
-      case 'questions': return <ReportBuilderScreen navigate={navigate} tweaks={tweaks} onSaveReport={handleSaveReport}/>;
+      case 'questions': return <ReportBuilderScreen navigate={navigate} tweaks={tweaks} onSaveReport={handleSaveReport} editReport={editingReport}/>;
       case 'datasources': return <DataSourcesScreen navigate={navigate}/>;
       default: return (
         <div className="screen" style={{display:'flex',flexDirection:'column',height:'100%'}}>
