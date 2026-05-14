@@ -3058,7 +3058,32 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
   const sqlColY = yMetrics[0]?.field || 'estimated_value';
   const sqlAgg  = yMetrics[0]?.agg === 'count' ? 'COUNT(*)' : `${(yMetrics[0]?.agg || 'SUM').toUpperCase()}(${sqlColY})`;
   const sqlTable = selectedTable;
-  const sqlWhere = filters.length > 0 ? ` WHERE ${filters.map(f => `${f.col} ${f.op} '${f.val}'`).join(' AND ')}` : '';
+
+  // Build WHERE clause from new filter structure
+  const buildFilterSQL = (f) => {
+    if (!f.val && !['is empty','is not empty'].includes(f.op)) return null;
+    const v = f.colType === 'str' ? `'${f.val}'` : f.val;
+    const opMap = {'is':'=','is not':'!=','contains':`LIKE '%${f.val}%'`,'does not contain':`NOT LIKE '%${f.val}%'`,'starts with':`LIKE '${f.val}%'`,'ends with':`LIKE '%${f.val}'`,'is empty':'IS NULL','is not empty':'IS NOT NULL','=':'=','≠':'!=','>':'>','<':'<','≥':'>=','≤':'<=','is before':'<','is after':'>','is on or before':'<=','is on or after':'>=','is within':'BETWEEN'};
+    if (f.op === 'is empty' || f.op === 'is not empty') return `${f.col} ${opMap[f.op]}`;
+    if (f.op === 'contains' || f.op === 'does not contain' || f.op === 'starts with' || f.op === 'ends with') return `${f.col} ${opMap[f.op]}`;
+    return `${f.col} ${opMap[f.op] || f.op} ${v}`;
+  };
+  const buildWhereClause = () => {
+    const parts = [];
+    filters.forEach((f, idx) => {
+      const j = idx === 0 ? '' : ` ${f.junction || 'AND'} `;
+      if (f.type === 'filter') {
+        const sql = buildFilterSQL(f);
+        if (sql) parts.push(j + sql);
+      } else if (f.type === 'group' && f.conditions.length > 0) {
+        const inner = f.conditions.map((c, ci) => (ci===0?'':` ${c.junction||'AND'} `) + (buildFilterSQL(c)||'')).join('');
+        if (inner.trim()) parts.push(j + `(${inner.trim()})`);
+      }
+    });
+    return parts.join('');
+  };
+  const whereClause = buildWhereClause();
+  const sqlWhere = whereClause.trim() ? ` WHERE ${whereClause.trim()}` : '';
   const generatedSQL = `SELECT ${sqlColX}, ${sqlAgg} FROM ${sqlTable}${sqlWhere} GROUP BY ${sqlColX} ORDER BY 2 DESC`;
 
   return (
@@ -3573,27 +3598,261 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
             </div>
           </>}
 
-          {step === 3 && <>
-            <div className="builder-panel-title">Filters</div>
-            <div className="builder-panel-body">
-              {filters.map((f,i) => (
-                <div key={i} style={{display:'flex',alignItems:'center',gap:6,padding:'8px var(--space-sm)',marginBottom:6,background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)'}}>
-                  <span style={{fontSize:'12px',color:'var(--text-primary)',fontWeight:500,minWidth:60}}>{f.col}</span>
-                  <select className="form-input" style={{flex:0,width:'70px',padding:'3px 6px',fontSize:'11.5px'}} value={f.op} onChange={e => {const nf=[...filters];nf[i].op=e.target.value;setFilters(nf);}}>
-                    <option>is</option><option>is not</option><option>contains</option><option>{'>'}</option><option>{'<'}</option>
-                  </select>
-                  <input className="form-input" style={{flex:1,padding:'3px 8px',fontSize:'12px'}} value={f.val} onChange={e => {const nf=[...filters];nf[i].val=e.target.value;setFilters(nf);}}/>
-                  <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer'}} onClick={() => setFilters(fls => fls.filter((_,j)=>j!==i))}>
-                    <Icon name="close" size={12}/>
-                  </button>
+          {step === 3 && (() => {
+            // ── Operator definitions by column type ──────────────────────────
+            const OPS = {
+              str:  ['is','is not','contains','does not contain','starts with','ends with','is empty','is not empty'],
+              num:  ['=','≠','>','<','≥','≤','is empty','is not empty'],
+              date: ['is','is before','is after','is on or before','is on or after','is within','is empty','is not empty'],
+            };
+            const NO_VALUE_OPS = ['is empty','is not empty'];
+
+            // All available columns incl. Row Count
+            const allCols = [
+              {name:'Row Count', type:'num'},
+              ...(currentTable?.cols || []),
+            ];
+
+            // ── Filter item updater ──────────────────────────────────────────
+            const updateFilter = (id, patch) => setFilters(prev =>
+              prev.map(f => f.id === id ? {...f,...patch}
+                : f.type === 'group'
+                  ? {...f, conditions: f.conditions.map(c => c.id===id ? {...c,...patch} : c)}
+                  : f
+              )
+            );
+            const removeFilter = (id) => setFilters(prev =>
+              prev.filter(f => f.id !== id).map(f =>
+                f.type === 'group' ? {...f, conditions: f.conditions.filter(c => c.id !== id)} : f
+              )
+            );
+            const removeGroup = (id) => setFilters(prev => prev.filter(f => f.id !== id));
+            const addConditionToGroup = (groupId, col) => {
+              const colDef = allCols.find(c => c.name === col) || allCols[0];
+              setFilters(prev => prev.map(f =>
+                f.id === groupId
+                  ? {...f, conditions:[...f.conditions, {id:Date.now()+Math.random(), col:colDef.name, colType:colDef.type, op:OPS[colDef.type][0], val:'', junction:'AND'}]}
+                  : f
+              ));
+            };
+            const updateGroupJunction = (groupId, field, val) => setFilters(prev =>
+              prev.map(f => f.id === groupId ? {...f, [field]: val} : f)
+            );
+
+            const makeFilter = (col) => {
+              const colDef = allCols.find(c => c.name === col) || allCols[0];
+              return {id:Date.now()+Math.random(), type:'filter', col:colDef.name, colType:colDef.type, op:OPS[colDef.type][0], val:'', junction:'AND'};
+            };
+            const makeGroup = () => ({
+              id:Date.now()+Math.random(), type:'group',
+              junction:'AND',      // how this group attaches to the chain above it
+              innerJunction:'AND', // AND/OR between conditions inside the group
+              conditions:[],
+            });
+
+            // ── Shared filter row renderer ───────────────────────────────────
+            const FilterRow = ({f, isFirst, showJunction, onJunctionChange}) => {
+              const ops = OPS[f.colType] || OPS.str;
+              const noVal = NO_VALUE_OPS.includes(f.op);
+              return (
+                <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:6}}>
+                  {/* Junction pill (AND/OR) — shown above every row except the first */}
+                  {showJunction && !isFirst && (
+                    <div style={{display:'flex',alignItems:'center',gap:4,paddingLeft:4}}>
+                      <div style={{height:1,flex:1,background:'var(--border)'}}/>
+                      <div style={{display:'flex',borderRadius:4,overflow:'hidden',border:'1px solid var(--border)',flexShrink:0}}>
+                        {['AND','OR'].map(j => (
+                          <button key={j} onClick={() => onJunctionChange(j)}
+                            style={{padding:'1px 8px',fontSize:'10px',fontWeight:700,border:'none',cursor:'pointer',
+                              background: f.junction===j ? 'var(--accent)' : 'var(--badge-bg)',
+                              color: f.junction===j ? 'white' : 'var(--text-tertiary)',
+                              transition:'all 0.15s',
+                            }}>{j}</button>
+                        ))}
+                      </div>
+                      <div style={{height:1,flex:1,background:'var(--border)'}}/>
+                    </div>
+                  )}
+                  <div style={{display:'flex',alignItems:'center',gap:5,padding:'7px 8px',background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)'}}>
+                    {/* Column selector */}
+                    <select className="form-input" style={{flex:'0 0 auto',maxWidth:100,padding:'2px 4px',fontSize:'11px',fontWeight:600}}
+                      value={f.col}
+                      onChange={e => {
+                        const colDef = allCols.find(c => c.name === e.target.value);
+                        updateFilter(f.id, {col:e.target.value, colType:colDef?.type||'str', op:OPS[colDef?.type||'str'][0], val:''});
+                      }}>
+                      {allCols.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                    </select>
+                    {/* Operator */}
+                    <select className="form-input" style={{flex:'0 0 auto',maxWidth:90,padding:'2px 4px',fontSize:'11px'}}
+                      value={f.op}
+                      onChange={e => updateFilter(f.id, {op:e.target.value, val:''})}>
+                      {ops.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    {/* Value */}
+                    {!noVal && (
+                      f.colType === 'date'
+                        ? <input type="date" className="form-input" style={{flex:1,padding:'2px 5px',fontSize:'11px'}} value={f.val} onChange={e => updateFilter(f.id,{val:e.target.value})}/>
+                        : f.colType === 'num'
+                          ? <input type="number" className="form-input" style={{flex:1,padding:'2px 5px',fontSize:'11px'}} value={f.val} onChange={e => updateFilter(f.id,{val:e.target.value})} placeholder="value"/>
+                          : <input className="form-input" style={{flex:1,padding:'2px 5px',fontSize:'11px'}} value={f.val} onChange={e => updateFilter(f.id,{val:e.target.value})} placeholder="value"/>
+                    )}
+                    <button style={{background:'none',border:'none',color:'var(--text-tertiary)',cursor:'pointer',padding:2,flexShrink:0}} onClick={() => removeFilter(f.id)}>
+                      <Icon name="close" size={11}/>
+                    </button>
+                  </div>
                 </div>
-              ))}
-              <button className="btn btn-ghost" style={{width:'100%',marginTop:8,justifyContent:'center'}}
-                onClick={() => setFilters(f => [...f, {col: currentTable?.cols[0]?.name || 'column', op:'is', val:''}])}>
-                <Icon name="plus" size={13}/> Add Filter
-              </button>
-            </div>
-          </>}
+              );
+            };
+
+            return (
+              <>
+                <div className="builder-panel-title">Filters</div>
+                <div className="builder-panel-body">
+
+                  {/* ── Top-level AND/OR toggle (shown when there are 2+ items) ── */}
+                  {filters.length >= 2 && (
+                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8,padding:'4px 8px',background:'var(--accent-light)',borderRadius:'var(--radius-sm)'}}>
+                      <span style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:500}}>Match</span>
+                      {['AND','OR'].map(j => (
+                        <button key={j} onClick={() => {
+                          // Set junction on all top-level items (except first)
+                          setFilters(prev => prev.map((f,i) => i===0 ? f : {...f, junction:j}));
+                        }}
+                          style={{padding:'2px 10px',fontSize:'11px',fontWeight:700,border:'none',borderRadius:3,cursor:'pointer',
+                            background: filters[1]?.junction===j ? 'var(--accent)' : 'var(--badge-bg)',
+                            color: filters[1]?.junction===j ? 'white' : 'var(--text-tertiary)',
+                          }}>{j}</button>
+                      ))}
+                      <span style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:500}}>conditions</span>
+                    </div>
+                  )}
+
+                  {/* ── Filter list ── */}
+                  {filters.map((f, idx) => {
+                    const isFirst = idx === 0;
+                    if (f.type === 'filter') {
+                      return (
+                        <FilterRow key={f.id} f={f} isFirst={isFirst} showJunction={true}
+                          onJunctionChange={j => updateFilter(f.id, {junction:j})}/>
+                      );
+                    }
+                    // ── Conditional Group ──
+                    if (f.type === 'group') {
+                      return (
+                        <div key={f.id} style={{marginBottom:8}}>
+                          {/* Group junction above the group block */}
+                          {!isFirst && (
+                            <div style={{display:'flex',alignItems:'center',gap:4,paddingLeft:4,marginBottom:4}}>
+                              <div style={{height:1,flex:1,background:'var(--border)'}}/>
+                              <div style={{display:'flex',borderRadius:4,overflow:'hidden',border:'1px solid var(--border)'}}>
+                                {['AND','OR'].map(j => (
+                                  <button key={j} onClick={() => updateGroupJunction(f.id,'junction',j)}
+                                    style={{padding:'1px 8px',fontSize:'10px',fontWeight:700,border:'none',cursor:'pointer',
+                                      background: f.junction===j?'var(--accent)':'var(--badge-bg)',
+                                      color: f.junction===j?'white':'var(--text-tertiary)',
+                                    }}>{j}</button>
+                                ))}
+                              </div>
+                              <div style={{height:1,flex:1,background:'var(--border)'}}/>
+                            </div>
+                          )}
+                          {/* Group container */}
+                          <div style={{border:'1px solid var(--accent)',borderRadius:'var(--radius-sm)',background:'var(--accent-light)',overflow:'hidden'}}>
+                            {/* Group header */}
+                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderBottom:'1px solid rgba(99,132,255,0.2)'}}>
+                              <span style={{fontSize:'10px',fontWeight:700,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.06em',flex:1}}>Condition Group</span>
+                              {/* Inner junction */}
+                              <span style={{fontSize:'10px',color:'var(--text-tertiary)'}}>Match</span>
+                              {['AND','OR'].map(j => (
+                                <button key={j} onClick={() => updateGroupJunction(f.id,'innerJunction',j)}
+                                  style={{padding:'1px 7px',fontSize:'10px',fontWeight:700,border:'none',borderRadius:3,cursor:'pointer',
+                                    background: f.innerJunction===j?'var(--accent)':'rgba(99,132,255,0.15)',
+                                    color: f.innerJunction===j?'white':'var(--accent)',
+                                  }}>{j}</button>
+                              ))}
+                              <span style={{fontSize:'10px',color:'var(--text-tertiary)'}}>within group</span>
+                              <button style={{background:'none',border:'none',color:'var(--accent)',cursor:'pointer',padding:2,marginLeft:4}} onClick={() => removeGroup(f.id)}>
+                                <Icon name="close" size={11}/>
+                              </button>
+                            </div>
+                            {/* Group conditions */}
+                            <div style={{padding:'8px 10px'}}>
+                              {f.conditions.length === 0 && (
+                                <div style={{fontSize:'12px',color:'var(--text-tertiary)',fontStyle:'italic',marginBottom:6,paddingLeft:2}}>
+                                  No conditions yet — click a field below to add one
+                                </div>
+                              )}
+                              {f.conditions.map((c, ci) => (
+                                <FilterRow key={c.id} f={c} isFirst={ci===0} showJunction={true}
+                                  onJunctionChange={j => updateFilter(c.id,{junction:j})}/>
+                              ))}
+                              {/* Add condition inside group — column picker */}
+                              <div style={{marginTop:4}}>
+                                <div style={{fontSize:'10px',color:'var(--accent)',fontWeight:600,marginBottom:4,textTransform:'uppercase',letterSpacing:'0.05em'}}>Add condition</div>
+                                <div style={{display:'flex',flexWrap:'wrap',gap:3}}>
+                                  {allCols.map(c => (
+                                    <button key={c.name} onClick={() => addConditionToGroup(f.id, c.name)}
+                                      className="btn"
+                                      style={{padding:'2px 7px',fontSize:'10.5px',height:'auto',
+                                        background:'rgba(99,132,255,0.12)',color:'var(--accent)',
+                                        border:'1px solid rgba(99,132,255,0.25)',
+                                      }}>
+                                      + {c.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+
+                  {/* ── Add Filter / Add Group buttons ── */}
+                  <div style={{display:'flex',gap:6,marginTop:10}}>
+                    <button className="btn btn-ghost" style={{flex:1,justifyContent:'center',fontSize:'12px'}}
+                      onClick={() => {
+                        const firstCol = allCols[0];
+                        setFilters(f => [...f, makeFilter(firstCol.name)]);
+                      }}>
+                      <Icon name="plus" size={12}/> Add Filter
+                    </button>
+                    <button className="btn btn-ghost" style={{flex:1,justifyContent:'center',fontSize:'12px',color:'var(--accent)',borderColor:'var(--accent)'}}
+                      onClick={() => setFilters(f => [...f, makeGroup()])}>
+                      <Icon name="plus" size={12}/> Add Group
+                    </button>
+                  </div>
+
+                  {/* ── Column field list ── */}
+                  <div className="divider"/>
+                  <div className="builder-section-title" style={{padding:'0 var(--space-sm)',marginBottom:4}}>
+                    Fields — click to add filter
+                  </div>
+                  {allCols.map(c => {
+                    const activeFiltersForCol = filters.filter(f => f.type==='filter' && f.col===c.name).length
+                      + filters.filter(f=>f.type==='group').reduce((a,g)=>a+g.conditions.filter(fc=>fc.col===c.name).length,0);
+                    return (
+                      <div key={c.name} className="field-item"
+                        style={{cursor:'pointer'}}
+                        onClick={() => setFilters(prev => [...prev, makeFilter(c.name)])}>
+                        <span style={{fontSize:'12.5px',fontStyle:c.name==='Row Count'?'italic':'normal',color:c.name==='Row Count'?'var(--text-secondary)':'var(--text-primary)'}}>{c.name}</span>
+                        <span style={{display:'flex',alignItems:'center',gap:4,marginLeft:'auto'}}>
+                          {activeFiltersForCol > 0 && (
+                            <span style={{fontSize:'10px',fontWeight:700,color:'white',background:'var(--accent)',padding:'1px 5px',borderRadius:20,minWidth:16,textAlign:'center'}}>{activeFiltersForCol}</span>
+                          )}
+                          <span className={`field-type ${c.type}`}>{c.type}</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                </div>
+              </>
+            );
+          })()}
 
           {step === 4 && <>
             <div className="builder-panel-title">Display Settings</div>
