@@ -2849,9 +2849,21 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
 
   // display settings (step 4)
   const [subtitle, setSubtitle] = useState('');
-  const [chartColor, setChartColor] = useState('#6384ff');
+  // seriesColors[i] = hex color for series/slice i
+  const [seriesColors, setSeriesColors] = useState(['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6']);
+  const [selectedSeriesIdx, setSelectedSeriesIdx] = useState(0);
   const [yAxisFormat, setYAxisFormat] = useState('number');
   const [legendPos, setLegendPos] = useState('bottom');
+
+  // Helper: get color for a series index, falling back through defaults
+  const DEFAULT_COLORS = ['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9'];
+  const getSeriesColor = (i) => seriesColors[i] || DEFAULT_COLORS[i % DEFAULT_COLORS.length];
+  const setSeriesColor = (i, hex) => setSeriesColors(prev => {
+    const next = [...prev];
+    while (next.length <= i) next.push(DEFAULT_COLORS[next.length % DEFAULT_COLORS.length]);
+    next[i] = hex;
+    return next;
+  });
 
   const onResizeMouseDown = (e) => {
     e.preventDefault();
@@ -2950,7 +2962,6 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
 
   const renderPreview = () => {
     const axisStyle = {background:'var(--card-bg)',border:'1px solid var(--border)',borderRadius:'8px',fontSize:'12px'};
-    const c1 = chartColor || 'var(--chart-1)';
     if (chartType === 'bar') return (
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={previewData} margin={{top:8,right:16,left:0,bottom:0}}>
@@ -2958,8 +2969,9 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
           <XAxis dataKey="source" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
           <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
           <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Bar dataKey="value" fill={c1} radius={[4,4,0,0]} name={yMetrics[0]?.field || 'Value'}/>
-          {yMetrics.length > 1 && <Bar dataKey="value2" fill="var(--chart-2)" radius={[4,4,0,0]} name={yMetrics[1]?.field || 'Value 2'}/>}
+          <Bar dataKey="value" fill={getSeriesColor(0)} radius={[4,4,0,0]} name={yMetrics[0]?.field || 'Value'}/>
+          {yMetrics.length > 1 && <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[4,4,0,0]} name={yMetrics[1]?.field || 'Value 2'}/>}
+          {yMetrics.length > 2 && <Bar dataKey="value3" fill={getSeriesColor(2)} radius={[4,4,0,0]} name={yMetrics[2]?.field || 'Value 3'}/>}
         </BarChart>
       </ResponsiveContainer>
     );
@@ -2970,8 +2982,8 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
           <XAxis type="number" tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
           <YAxis type="category" dataKey="source" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} width={72}/>
           <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Bar dataKey="value" fill={c1} radius={[0,4,4,0]} name={yMetrics[0]?.field || 'Value'}/>
-          {yMetrics.length > 1 && <Bar dataKey="value2" fill="var(--chart-2)" radius={[0,4,4,0]} name={yMetrics[1]?.field || 'Value 2'}/>}
+          <Bar dataKey="value" fill={getSeriesColor(0)} radius={[0,4,4,0]} name={yMetrics[0]?.field || 'Value'}/>
+          {yMetrics.length > 1 && <Bar dataKey="value2" fill={getSeriesColor(1)} radius={[0,4,4,0]} name={yMetrics[1]?.field || 'Value 2'}/>}
         </BarChart>
       </ResponsiveContainer>
     );
@@ -2982,8 +2994,8 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
           <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
           <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
           <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Area type="monotone" dataKey="leads" stroke={c1} strokeWidth={2} fill="transparent" dot={false} name={yMetrics[0]?.field || 'Leads'}/>
-          {yMetrics.length > 1 && <Area type="monotone" dataKey="sales" stroke="var(--chart-2)" strokeWidth={2} fill="transparent" dot={false} name={yMetrics[1]?.field || 'Sales'}/>}
+          <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="transparent" dot={false} name={yMetrics[0]?.field || 'Series 1'}/>
+          {yMetrics.length > 1 && <Area type="monotone" dataKey="sales" stroke={getSeriesColor(1)} strokeWidth={2} fill="transparent" dot={false} name={yMetrics[1]?.field || 'Series 2'}/>}
         </AreaChart>
       </ResponsiveContainer>
     );
@@ -2991,28 +3003,25 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={monthlyLeads} margin={{top:8,right:16,left:-10,bottom:0}}>
           <defs>
-            <linearGradient id="rbAreaGrad1" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={c1} stopOpacity={0.25}/>
-              <stop offset="95%" stopColor={c1} stopOpacity={0}/>
-            </linearGradient>
-            <linearGradient id="rbAreaGrad2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.25}/>
-              <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0}/>
-            </linearGradient>
+            {[0,1,2].map(i => (
+              <linearGradient key={i} id={`rbAreaGrad${i}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={getSeriesColor(i)} stopOpacity={0.25}/>
+                <stop offset="95%" stopColor={getSeriesColor(i)} stopOpacity={0}/>
+              </linearGradient>
+            ))}
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
           <XAxis dataKey="month" tick={{fontSize:11,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false}/>
           <YAxis tick={{fontSize:10,fill:'var(--text-tertiary)'}} axisLine={false} tickLine={false} tickFormatter={formatYValue}/>
           <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
-          <Area type="monotone" dataKey="leads" stroke={c1} strokeWidth={2} fill="url(#rbAreaGrad1)" dot={false} name={yMetrics[0]?.field || 'Leads'}/>
-          {yMetrics.length > 1 && <Area type="monotone" dataKey="sales" stroke="var(--chart-2)" strokeWidth={2} fill="url(#rbAreaGrad2)" dot={false} name={yMetrics[1]?.field || 'Sales'}/>}
+          <Area type="monotone" dataKey="leads" stroke={getSeriesColor(0)} strokeWidth={2} fill="url(#rbAreaGrad0)" dot={false} name={yMetrics[0]?.field || 'Series 1'}/>
+          {yMetrics.length > 1 && <Area type="monotone" dataKey="sales" stroke={getSeriesColor(1)} strokeWidth={2} fill="url(#rbAreaGrad1)" dot={false} name={yMetrics[1]?.field || 'Series 2'}/>}
         </AreaChart>
       </ResponsiveContainer>
     );
     if (chartType === 'combo') {
       const barSeries  = yMetrics.filter(m => m.comboType === 'bar');
       const lineSeries = yMetrics.filter(m => m.comboType === 'line' || m.comboType === 'area');
-      const chartColors = [c1,'var(--chart-2)','var(--chart-3)','var(--chart-4)','var(--chart-5)'];
       return (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={monthlyLeads} margin={{top:8,right:16,left:-10,bottom:0}}>
@@ -3022,10 +3031,10 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
             <Tooltip contentStyle={axisStyle} formatter={v => [formatYValue(v)]}/>
             <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize:'11px'}}/>
             {barSeries.map((m,i) => (
-              <Bar key={m.field+i} dataKey={['leads','sales','revenue'][i] || 'leads'} fill={chartColors[yMetrics.indexOf(m) % 5]} radius={[4,4,0,0]} name={m.field}/>
+              <Bar key={m.field+i} dataKey={['leads','sales','revenue'][i]||'leads'} fill={getSeriesColor(yMetrics.indexOf(m))} radius={[4,4,0,0]} name={m.field}/>
             ))}
             {lineSeries.map((m,i) => (
-              <Line key={m.field+i} type="monotone" dataKey={['revenue','leads','sales'][i] || 'leads'} stroke={chartColors[(barSeries.length + i) % 5]} strokeWidth={2} dot={false} name={m.field}/>
+              <Line key={m.field+i} type="monotone" dataKey={['revenue','leads','sales'][i]||'leads'} stroke={getSeriesColor(yMetrics.indexOf(m))} strokeWidth={2} dot={false} name={m.field}/>
             ))}
           </BarChart>
         </ResponsiveContainer>
@@ -3034,11 +3043,9 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
     if (chartType === 'pie') {
       const breakoutVals = getPieBreakoutValues();
       const pieData = breakoutVals.length > 0
-        ? breakoutVals.map((v,i) => ({name: v, value: [54, 43, 2, 1][i] || Math.floor(50/breakoutVals.length)}))
+        ? breakoutVals.map((v,i) => ({name:v, value:[54,43,2,1][i] || Math.floor(50/breakoutVals.length)}))
         : trafficBySource.map(s => ({name:s.name, value:s.value}));
-      const total = pieData.reduce((a,d) => a + d.value, 0);
-      // Build slice colors: first slice uses chartColor, rest use chart-2..5
-      const PIE_DYNAMIC = [c1,'var(--chart-2)','var(--chart-3)','var(--chart-4)','var(--chart-5)'];
+      const total = pieData.reduce((a,d) => a+d.value, 0);
       return (
         <div style={{display:'flex',alignItems:'center',height:'100%',gap:32}}>
           <div style={{minWidth:220,display:'flex',flexDirection:'column',gap:10}}>
@@ -3046,7 +3053,7 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
               const pct = total > 0 ? ((d.value/total)*100).toFixed(2)+'%' : '0.00%';
               return (
                 <div key={d.name} style={{display:'flex',alignItems:'center',gap:8,fontSize:'13px',color:'var(--text-primary)'}}>
-                  <span style={{width:10,height:10,borderRadius:'50%',background:PIE_DYNAMIC[i%5],flexShrink:0}}/>
+                  <span style={{width:10,height:10,borderRadius:'50%',background:getSeriesColor(i),flexShrink:0}}/>
                   <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.name}</span>
                   <span style={{fontWeight:600,color:'var(--text-secondary)',minWidth:52,textAlign:'right'}}>{pct}</span>
                 </div>
@@ -3056,13 +3063,14 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={pieData} cx="50%" cy="50%" innerRadius="42%" outerRadius="72%" paddingAngle={2} dataKey="value"
+                onClick={(_, i) => { setSelectedSeriesIdx(i); }}
                 label={({cx,cy,midAngle,innerRadius,outerRadius,percent}) => {
                   if (percent < 0.04) return null;
                   const R = Math.PI/180, r = innerRadius+(outerRadius-innerRadius)*0.5;
                   const x = cx + r*Math.cos(-midAngle*R), y = cy + r*Math.sin(-midAngle*R);
                   return <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>{(percent*100).toFixed(1)}%</text>;
                 }} labelLine={false}>
-                {pieData.map((_,i) => <Cell key={i} fill={PIE_DYNAMIC[i%5]}/>)}
+                {pieData.map((_,i) => <Cell key={i} fill={getSeriesColor(i)} stroke={selectedSeriesIdx===i ? '#fff' : 'none'} strokeWidth={selectedSeriesIdx===i ? 2 : 0}/>)}
               </Pie>
               <Tooltip contentStyle={{background:'var(--card-bg)',border:'1px solid var(--border)',borderRadius:'8px',fontSize:'12px'}}/>
             </PieChart>
@@ -3074,11 +3082,10 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
       const kpiField = yMetrics[0]?.field || 'Row Count';
       const aggLabel = {count:'Count of rows',sum:'Sum of',avg:'Avg of',distinct:'Distinct',min:'Min of',max:'Max of'}[yMetrics[0]?.agg || 'count'];
       const kpiLabel = kpiField === 'Row Count' ? 'Total Row Count' : `${aggLabel} ${kpiField}`;
-      const rawVal = 15280;
       return (
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:8}}>
-          <div style={{fontFamily:'var(--font-display)',fontSize:'64px',fontWeight:700,color:c1,letterSpacing:'-2px',lineHeight:1}}>
-            {formatYValue(rawVal)}
+          <div style={{fontFamily:'var(--font-display)',fontSize:'64px',fontWeight:700,color:getSeriesColor(0),letterSpacing:'-2px',lineHeight:1}}>
+            {formatYValue(15280)}
           </div>
           <div style={{fontSize:'14px',color:'var(--text-secondary)',fontWeight:500}}>{kpiLabel}</div>
           <div className="kpi-delta up" style={{marginTop:4}}><Icon name="arrowUp" size={11}/>+18.4% vs last period</div>
@@ -3868,40 +3875,100 @@ const ReportBuilderScreen = ({ navigate, tweaks, onSaveReport }) => {
                 <input className="form-input" value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="Optional subtitle…"/>
               </div>
 
-              {/* ── Color Theme ── */}
-              <div className="form-group">
-                <label className="form-label">Primary Color</label>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                  {/* Native color picker */}
-                  <div style={{position:'relative',width:36,height:36,flexShrink:0}}>
-                    <input type="color" value={chartColor} onChange={e=>setChartColor(e.target.value)}
-                      style={{position:'absolute',inset:0,width:'100%',height:'100%',opacity:0,cursor:'pointer',padding:0,border:'none'}}/>
-                    <div style={{width:36,height:36,borderRadius:8,background:chartColor,border:'2px solid var(--border)',cursor:'pointer',boxShadow:'0 1px 3px rgba(0,0,0,0.12)'}}/>
+              {/* ── Per-series / per-slice Color Editor ── */}
+              {(() => {
+                // Build the list of series that can be colored
+                const isPieChart = chartType === 'pie';
+                const isMultiSeries = ['bar','row','line','area','combo'].includes(chartType) && yMetrics.length > 0;
+                const isSingleKPI = chartType === 'number';
+
+                let seriesList = [];
+                if (isPieChart) {
+                  const bv = getPieBreakoutValues();
+                  seriesList = (bv.length > 0 ? bv : trafficBySource.map(s=>s.name)).map((name,i) => ({label: name, idx: i}));
+                } else if (isMultiSeries) {
+                  seriesList = yMetrics.map((m,i) => ({label: m.field || `Series ${i+1}`, idx: i}));
+                } else if (isSingleKPI) {
+                  seriesList = [{label: yMetrics[0]?.field || 'KPI Value', idx: 0}];
+                } else {
+                  seriesList = [{label: 'Series 1', idx: 0}];
+                }
+
+                const activeColor = getSeriesColor(selectedSeriesIdx);
+
+                return (
+                  <div className="form-group">
+                    <label className="form-label">
+                      {isPieChart ? 'Slice Colors' : 'Series Colors'}
+                    </label>
+
+                    {/* Series selector — click to pick which one to edit */}
+                    {seriesList.length > 0 && (
+                      <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:10}}>
+                        {seriesList.map(({label,idx}) => {
+                          const isActive = selectedSeriesIdx === idx;
+                          return (
+                            <div key={idx}
+                              onClick={() => setSelectedSeriesIdx(idx)}
+                              style={{
+                                display:'flex',alignItems:'center',gap:9,padding:'6px 10px',
+                                borderRadius:'var(--radius-sm)',cursor:'pointer',
+                                border:`1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                                background: isActive ? 'var(--accent-light)' : 'var(--input-bg)',
+                                transition:'all 0.15s',
+                              }}>
+                              {/* Color swatch */}
+                              <div style={{width:16,height:16,borderRadius:4,background:getSeriesColor(idx),border:'1px solid rgba(0,0,0,0.1)',flexShrink:0}}/>
+                              <span style={{fontSize:'12.5px',fontWeight:isActive?600:400,color:isActive?'var(--accent)':'var(--text-primary)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                                {label}
+                              </span>
+                              {isActive && <span style={{fontSize:'10px',color:'var(--accent)',fontWeight:600}}>editing</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Color picker for the selected series */}
+                    <div style={{padding:'10px',background:'var(--input-bg)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)'}}>
+                      <div style={{fontSize:'11px',color:'var(--text-tertiary)',fontWeight:600,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                        {seriesList[selectedSeriesIdx]?.label || `Series ${selectedSeriesIdx+1}`}
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                        {/* Native color picker hidden behind swatch */}
+                        <div style={{position:'relative',width:36,height:36,flexShrink:0}}>
+                          <input type="color" value={activeColor} onChange={e=>setSeriesColor(selectedSeriesIdx,e.target.value)}
+                            style={{position:'absolute',inset:0,width:'100%',height:'100%',opacity:0,cursor:'pointer',padding:0,border:'none'}}/>
+                          <div style={{width:36,height:36,borderRadius:8,background:activeColor,border:'2px solid var(--border)',cursor:'pointer',boxShadow:'0 1px 3px rgba(0,0,0,0.15)'}}/>
+                        </div>
+                        {/* Hex input */}
+                        <input className="form-input"
+                          style={{flex:1,fontFamily:'monospace',fontSize:'13px',letterSpacing:'0.04em'}}
+                          value={activeColor}
+                          maxLength={7}
+                          placeholder="#6384ff"
+                          onChange={e => {
+                            const v = e.target.value;
+                            if (/^#[0-9a-fA-F]{0,6}$/.test(v)) setSeriesColor(selectedSeriesIdx, v);
+                          }}
+                        />
+                      </div>
+                      {/* Preset swatches */}
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:4}}>
+                        {['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9',
+                          '#f97316','#64748b','#1e293b','#be185d','#065f46','#7c3aed','#b45309','#0369a1'].map(hex => (
+                          <button key={hex} onClick={()=>setSeriesColor(selectedSeriesIdx,hex)} title={hex}
+                            style={{
+                              width:'100%',aspectRatio:'1',borderRadius:4,background:hex,border:'none',cursor:'pointer',
+                              outline: activeColor===hex ? '2.5px solid var(--text-primary)' : '2px solid transparent',
+                              outlineOffset:1,transition:'outline 0.1s',
+                            }}/>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  {/* Hex input */}
-                  <input className="form-input" style={{flex:1,fontFamily:'monospace',fontSize:'13px',letterSpacing:'0.04em'}}
-                    value={chartColor}
-                    onChange={e => {
-                      const v = e.target.value;
-                      setChartColor(v);
-                    }}
-                    maxLength={7}
-                    placeholder="#6384ff"
-                  />
-                </div>
-                {/* Preset swatches */}
-                <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:4}}>
-                  {['#6384ff','#22c55e','#f59e0b','#ec4899','#14b8a6','#8b5cf6','#ef4444','#0ea5e9',
-                    '#f97316','#64748b','#1e293b','#be185d','#065f46','#7c3aed','#b45309','#0369a1'].map(hex => (
-                    <button key={hex} onClick={()=>setChartColor(hex)} title={hex}
-                      style={{
-                        width:'100%',aspectRatio:'1',borderRadius:5,background:hex,border:'none',cursor:'pointer',
-                        outline: chartColor===hex ? '2px solid var(--text-primary)' : '2px solid transparent',
-                        outlineOffset:1,transition:'outline 0.1s',
-                      }}/>
-                  ))}
-                </div>
-              </div>
+                );
+              })()}
 
               {/* ── Y-Axis Format ── */}
               <div className="form-group">
