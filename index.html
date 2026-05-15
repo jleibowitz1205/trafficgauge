@@ -4312,10 +4312,6 @@ const Sidebar = ({ screen, navigate, sidebarMode }) => {
     {id:'datasources',icon:'database',label:'Data Sources'},
     {id:'starred',icon:'star',label:'Starred'},
   ];
-  const bottomItems = [
-    {id:'settings',icon:'settings',label:'Settings'},
-  ];
-
   return (
     <nav className={`sidebar${collapsed?' collapsed':''}${hidden?' hidden':''}`}>
       <div className="sidebar-logo" style={{justifyContent: collapsed ? 'center' : 'flex-start'}}>
@@ -4341,49 +4337,6 @@ const Sidebar = ({ screen, navigate, sidebarMode }) => {
           </div>
         ))}
 
-        {!collapsed && (
-          <div className="nav-item" style={{marginTop:'var(--space-sm)', opacity:0.65, fontSize:'12px'}} onClick={() => {}}>
-            <span className="nav-icon" style={{transform:'rotate(180deg)', display:'inline-flex'}}>
-              <Icon name="chevronRight" size={14}/>
-            </span>
-            <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>Back To Convergence Portal</span>
-          </div>
-        )}
-        {!collapsed && (
-          <div className="nav-item" style={{padding:'8px var(--space-md)'}} onClick={() => navigate('dashboard')}>
-            <img
-              src="uploads/CONVRGE-Pipelines_Logo-Primary_White_1200w-271686c3.png"
-              alt="Pipelines"
-              style={{height:'16px', width:'auto', maxWidth:'150px', objectFit:'contain', opacity:0.8}}
-            />
-          </div>
-        )}
-        {!collapsed && (
-          <div className="nav-item" style={{padding:'8px var(--space-md)'}} onClick={() => navigate('dashboard')}>
-            <img
-              src="uploads/CONVRGE-Touch_Logo-Primary_White_1200w.png"
-              alt="TouchPoints"
-              style={{height:'16px', width:'auto', maxWidth:'150px', objectFit:'contain', opacity:0.8}}
-            />
-          </div>
-        )}
-      </div>
-      <div className="sidebar-footer">
-        {!collapsed && bottomItems.map(item => (
-          <div key={item.id} className={`nav-item${screen===item.id?' active':''}`}>
-            <span className="nav-icon"><Icon name={item.icon} size={16}/></span>
-            <span>{item.label}</span>
-          </div>
-        ))}
-        <div className="user-row">
-          <div className="avatar">CA</div>
-          {!collapsed && (
-            <div>
-              <div className="user-name">Alex Morgan</div>
-              <div className="user-org">Convergence Auto</div>
-            </div>
-          )}
-        </div>
       </div>
     </nav>
   );
